@@ -11,6 +11,16 @@
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link href="/kairos-context-keeper/css/style.css" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="/kairos-context-keeper/logo.svg">
+    <script>
+        // Handle SPA routing redirect from 404.html
+        (function(){
+            var redirect = sessionStorage.redirect;
+            delete sessionStorage.redirect;
+            if (redirect && redirect != location.href) {
+                history.replaceState(null, null, redirect);
+            }
+        })();
+    </script>
 </head>
 <body class="bg-gray-100">
     <nav class="bg-white shadow-lg">

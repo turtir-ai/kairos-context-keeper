@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Page Not Found - Kairos</title>
+    <title>Redirecting... - Kairos</title>
     <script>
-        sessionStorage.redirect = location.href;
+        // Store the current path in sessionStorage
+        sessionStorage.redirect = location.pathname + location.search;
     </script>
-    <meta http-equiv="refresh" content="0;URL='/'">
+    <meta http-equiv="refresh" content="0;URL='/kairos-context-keeper/'">
 </head>
 <body>
     <h1>Redirecting...</h1>
-    <p>If you are not redirected automatically, <a href="/">click here</a>.</p>
+    <p>If you are not redirected automatically, <a href="/kairos-context-keeper/">click here</a>.</p>
     <script>
         (function(){
             var redirect = sessionStorage.redirect;
