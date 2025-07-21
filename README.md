@@ -1,19 +1,31 @@
 # Kairos: The Context Keeper
 
-<!-- TODO: Add a real banner image -->
 ![Kairos Banner](docs/logo.svg)
 
-## 📖 Manifesto: To Be the Unforgettable Memory of Development
+## 📖 Manifesto: Curing AI's Contextual Amnesia
 
-An autonomous development supervisor leveraging context engineering to manage projects from start to finish. Kairos helps teams maintain context, automate routine tasks, and deliver better software faster.
+Modern AI coding assistants are powerful, yet flawed. They suffer from Contextual Amnesia, forgetting the core mission, architectural rules, and historical decisions of a project. This leads to inconsistent, out-of-sync, and often incorrect code.
+
+Kairos was born to solve this fundamental problem. Our philosophy is simple: We trust the LLM's intelligence, but we manage its memory and loyalty. Kairos acts as the project's digital twin—a living, evolving supervisor that ensures the AI never forgets.
 
 ## 🧠 Key Features
 
-- **Context Engineering**: Advanced context preservation system that learns and adapts to your development patterns
-- **Agent-Based Architecture**: Intelligent agents that handle different aspects of development
-- **DevOps Integration**: Seamless integration with modern DevOps tools and cloud platforms
+* **Context Engineering**: Advanced context preservation system that learns and adapts to your development patterns
+* **Agent-Based Architecture**: Intelligent agents that handle different aspects of development autonomously
+* **DevOps Integration**: Seamless integration with modern DevOps tools and cloud platforms
+* **Memory Management**: Sophisticated knowledge graph that maintains project context across time
+* **Adaptive Learning**: Self-improving system that gets better with each interaction
 
-## 🏗️ Architectural Diagram
+## 🤔 Why Kairos?
+
+While tools like Cursor and Copilot are excellent assistants, Kairos operates at a higher level—as a supervisor.
+
+* **Proactive vs. Reactive**: Kairos doesn't just respond to prompts; it proactively manages the project's context, correcting deviations before they become problems.
+* **Long-Term Memory**: It builds a comprehensive Knowledge Graph of your project, ensuring that decisions made weeks ago still inform today's code.
+* **Autonomous Learning**: Kairos is a self-improving system. It learns from its mistakes and fine-tunes its own local models to become a better partner over time.
+* **Model Agnostic**: Work with the best tool for the job. Kairos intelligently routes tasks to local models (Ollama), free cloud tiers (Gemini), or powerful proprietary models, optimizing for cost and performance.
+
+## 🏗️ Architecture
 
 ```mermaid
 graph TD
@@ -28,42 +40,45 @@ graph TD
 
 ## 🛠️ Tech Stack
 
-- **Backend**: Python, FastAPI
-- **Storage**: Neo4j, ChromaDB
-- **AI/ML**: Ollama, OpenRouter
-- **DevOps**: Docker, Kubernetes
-- **Monitoring**: Prometheus, Grafana
+* **Backend**: Python, FastAPI
+* **Storage**: Neo4j (Knowledge Graph), ChromaDB (Vector Store)
+* **AI/ML**: Ollama, OpenRouter, Custom Model Routing
+* **DevOps**: Docker, Kubernetes, Prometheus
+* **Monitoring**: Grafana, Custom Metrics
 
 ## 🚀 Getting Started
 
 ```bash
 # Clone the repository
 git clone https://github.com/turtir-ai/kairos-context-keeper.git
-
-# Navigate to the project directory
 cd kairos-context-keeper
 
-# Install dependencies
+# Install dependencies (if not using Docker)
 pip install -r requirements.txt
 
-# Start the daemon
-python src/daemon.py
+# Run all services with Docker (Recommended)
+# This will start the Kairos Daemon, Neo4j, ChromaDB, and monitoring stack
+docker-compose up -d
+
+# Start and interact with the Kairos supervisor
+kairos start
 ```
 
-> For a detailed setup and configuration guide, please see the docs/ directory.
+> For detailed setup instructions and configuration options, please see the [docs/](docs/) directory.
 
 ## 📈 Roadmap
 
-- [x] Core context engine implementation
-- [x] Basic agent system
-- [x] Memory store integration
-- [ ] Advanced task planning
-- [ ] Multi-repository support
-- [ ] Team collaboration features
+* Core context engine implementation
+* Advanced agent system with specialized roles
+* Memory store optimization and scaling
+* Task planning and execution improvements
+* Multi-repository support
+* Team collaboration features
+* Custom model fine-tuning pipeline
 
 ## 🤝 Contributing
 
-We welcome contributions! Please read our [Contributing Guide](docs/COMMUNITY.md) to get started.
+We welcome contributions! Please read our [Contributing Guide](docs/CONTRIBUTING.md) to get started.
 
 ## 🏆 Recognition
 
@@ -75,16 +90,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Links
 
-- [Project Website](https://turtir-ai.github.io/kairos-context-keeper)
-- [GitHub Repository](https://github.com/turtir-ai/kairos-context-keeper)
-- [DevPost Project](https://devpost.com/software/kairos-the-context-keeper)
-<!-- TODO: Update with the actual Discord invite link -->
+* [Project Website](https://turtir-ai.github.io/kairos-context-keeper)
+* [GitHub Repository](https://github.com/turtir-ai/kairos-context-keeper)
+* [DevPost Project](https://devpost.com/software/kairos-the-context-keeper)
+* [Documentation](docs/)
 
 ## 📧 Contact
 
-For questions and support, please email us at turtirhey@gmail.com 
+For questions and support, please email us at turtirhey@gmail.com
 
-## About | Hakkında
+## About
 
 🇬🇧 **English**  
 Kairos: The Context Keeper is an autonomous development supervisor based on context engineering. It provides a premium project structure for hackathons and developer onboarding, helping teams maintain context and deliver better software faster.
