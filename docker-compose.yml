@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  kairos-daemon:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - data:/data
+    environment:
+      - VECTOR_DB_PATH=/data/vector_db
+      - GRAPH_DB_PATH=/data/graph_db
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=eu-north-1
+    depends_on:
+      - vector-db
+      - graph-db
+
+  vector-db:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - vector_data:/qdrant/storage
+
+  graph-db:
+    image: neo4j:latest
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - graph_data:/data
+    environment:
+      - NEO4J_AUTH=neo4j/kairos
+      - NEO4J_dbms_memory_pagecache_size=1G
+      - NEO4J_dbms_memory_heap_initial__size=1G
+      - NEO4J_dbms_memory_heap_max__size=1G
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./k8s/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=kairos
+    depends_on:
+      - prometheus
+
+volumes:
+  data:
+  vector_data:
+  graph_data:
+  prometheus_data:
+  grafana_data: 

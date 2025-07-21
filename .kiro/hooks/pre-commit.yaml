@@ -1,0 +1,128 @@
+name: pre-commit
+description: Commit öncesi kontroller ve otomatik düzeltmeler
+version: 1.0.0
+
+triggers:
+  - event: pre-commit
+    conditions:
+      - type: file_pattern
+        pattern: "*.py,*.js,*.ts"
+
+actions:
+  - name: code_format
+    type: format
+    config:
+      python:
+        tool: black
+        line_length: 88
+      javascript:
+        tool: prettier
+        semi: false
+        singleQuote: true
+      typescript:
+        tool: prettier
+        semi: false
+        singleQuote: true
+
+  - name: lint_check
+    type: lint
+    config:
+      python:
+        tool: flake8
+        max_line_length: 88
+        ignore: ["E203", "W503"]
+      javascript:
+        tool: eslint
+        fix: true
+      typescript:
+        tool: eslint
+        fix: true
+
+  - name: type_check
+    type: typecheck
+    config:
+      python:
+        tool: mypy
+        strict: true
+      typescript:
+        tool: tsc
+        strict: true
+
+  - name: security_scan
+    type: security
+    config:
+      python:
+        tool: bandit
+        level: low
+      javascript:
+        tool: npm audit
+        level: moderate
+
+  - name: test_run
+    type: test
+    config:
+      python:
+        tool: pytest
+        fail_fast: true
+      javascript:
+        tool: jest
+        fail_fast: true
+
+  - name: memory_check
+    type: custom
+    script: |
+      from kairos.memory import ContextManager
+      
+      def check_memory_consistency():
+          ctx = ContextManager()
+          return ctx.validate_changes()
+
+metrics:
+  collect:
+    - name: format_fixes
+      type: counter
+      labels:
+        action: format
+        language: [python, javascript, typescript]
+
+    - name: lint_errors
+      type: counter
+      labels:
+        action: lint
+        language: [python, javascript, typescript]
+
+    - name: type_errors
+      type: counter
+      labels:
+        action: typecheck
+        language: [python, javascript, typescript]
+
+    - name: security_issues
+      type: counter
+      labels:
+        action: security
+        severity: [low, moderate, high, critical]
+
+    - name: test_failures
+      type: counter
+      labels:
+        action: test
+        language: [python, javascript, typescript]
+
+    - name: memory_inconsistencies
+      type: counter
+      labels:
+        action: memory_check
+        type: [context, relation, embedding]
+
+notifications:
+  on_failure:
+    - type: console
+      format: detailed
+    - type: slack
+      channel: "#dev-alerts"
+      format: summary
+
+  on_success:
+    - type: console
+      format: summary 

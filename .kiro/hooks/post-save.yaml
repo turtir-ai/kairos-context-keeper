@@ -1,0 +1,106 @@
+name: post-save
+description: Dosya kaydetme sonrası otomatik işlemler
+version: 1.0.0
+
+triggers:
+  - event: post-save
+    conditions:
+      - type: file_pattern
+        pattern: "*.py,*.js,*.ts,*.md"
+
+actions:
+  - name: update_docs
+    type: documentation
+    config:
+      python:
+        tool: pdoc
+        output: docs/api
+      typescript:
+        tool: typedoc
+        output: docs/api
+      markdown:
+        tool: docusaurus
+        output: docs/site
+
+  - name: update_tests
+    type: test_generation
+    config:
+      python:
+        tool: pytest-ai
+        coverage_target: 80
+      javascript:
+        tool: jest-ai
+        coverage_target: 80
+
+  - name: update_memory
+    type: custom
+    script: |
+      from kairos.memory import ContextManager
+      from kairos.agents import LinkAgent
+      
+      def update_project_memory():
+          ctx = ContextManager()
+          agent = LinkAgent()
+          
+          # Dosya değişikliklerini analiz et
+          changes = ctx.analyze_changes()
+          
+          # Bağlamı güncelle
+          agent.update_context(changes)
+          
+          # Bilgi grafını güncelle
+          ctx.update_knowledge_graph(changes)
+          
+          # Vektör veritabanını güncelle
+          ctx.update_vector_store(changes)
+          
+          return True
+
+  - name: code_metrics
+    type: metrics
+    config:
+      tools:
+        - radon
+        - sonarqube
+        - codecov
+      thresholds:
+        complexity: 10
+        maintainability: B
+        coverage: 80
+
+metrics:
+  collect:
+    - name: doc_updates
+      type: counter
+      labels:
+        action: documentation
+        type: [api, site]
+
+    - name: test_generation
+      type: counter
+      labels:
+        action: test
+        result: [success, failure]
+
+    - name: memory_updates
+      type: counter
+      labels:
+        action: memory
+        type: [context, graph, vector]
+
+    - name: code_quality
+      type: gauge
+      labels:
+        metric: [complexity, maintainability, coverage]
+
+notifications:
+  on_failure:
+    - type: console
+      format: detailed
+    - type: slack
+      channel: "#dev-alerts"
+      format: summary
+
+  on_success:
+    - type: console
+      format: summary 

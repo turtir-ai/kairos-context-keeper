@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+docker
+qdrant-client
+neo4j
+python-dotenv 

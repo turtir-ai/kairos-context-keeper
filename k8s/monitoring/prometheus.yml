@@ -1,0 +1,32 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'kairos'
+    static_configs:
+      - targets: ['kairos-daemon:8000']
+    metrics_path: '/metrics'
+
+  - job_name: 'vector-db'
+    static_configs:
+      - targets: ['vector-db:6333']
+    metrics_path: '/metrics'
+
+  - job_name: 'graph-db'
+    static_configs:
+      - targets: ['graph-db:7474']
+    metrics_path: '/metrics'
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+rule_files:
+  - 'alert.rules'
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - 'alertmanager:9093' 

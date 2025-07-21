@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kairos
+  labels:
+    app: kairos
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kairos
+  template:
+    metadata:
+      labels:
+        app: kairos
+    spec:
+      containers:
+      - name: kairos
+        image: turtir/kairos:latest
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        env:
+        - name: VECTOR_DB_PATH
+          value: /data/vector_db
+        - name: GRAPH_DB_PATH
+          value: /data/graph_db
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-secrets
+              key: access-key
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-secrets
+              key: secret-key
+        volumeMounts:
+        - name: vector-db
+          mountPath: /data/vector_db
+        - name: graph-db
+          mountPath: /data/graph_db
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: vector-db
+        persistentVolumeClaim:
+          claimName: vector-db-pvc
+      - name: graph-db
+        persistentVolumeClaim:
+          claimName: graph-db-pvc 
