@@ -1,16 +1,40 @@
 # Kairos: The Context Keeper
 
-![Kairos Logo](docs/logo.svg)
+<!-- TODO: Add a real banner image -->
+![Kairos Banner](docs/logo.svg)
+
+## 📖 Manifesto: To Be the Unforgettable Memory of Development
 
 An autonomous development supervisor leveraging context engineering to manage projects from start to finish. Kairos helps teams maintain context, automate routine tasks, and deliver better software faster.
 
-## 🌟 Features
+## 🧠 Key Features
 
 - **Context Engineering**: Advanced context preservation system that learns and adapts to your development patterns
 - **Agent-Based Architecture**: Intelligent agents that handle different aspects of development
 - **DevOps Integration**: Seamless integration with modern DevOps tools and cloud platforms
 
-## 🚀 Quick Start
+## 🏗️ Architectural Diagram
+
+```mermaid
+graph TD
+    A[Developer] --> B[Kairos Daemon]
+    B --> C[Context Engine]
+    B --> D[Agent System]
+    C --> E[Memory Store]
+    D --> F[Task Execution]
+    E --> G[Neo4j + ChromaDB]
+    F --> H[LLM Router]
+```
+
+## 🛠️ Tech Stack
+
+- **Backend**: Python, FastAPI
+- **Storage**: Neo4j, ChromaDB
+- **AI/ML**: Ollama, OpenRouter
+- **DevOps**: Docker, Kubernetes
+- **Monitoring**: Prometheus, Grafana
+
+## 🚀 Getting Started
 
 ```bash
 # Clone the repository
@@ -26,11 +50,16 @@ pip install -r requirements.txt
 python src/daemon.py
 ```
 
-## 📖 Documentation
+> For a detailed setup and configuration guide, please see the docs/ directory.
 
-- [Architecture Overview](docs/architecture.md)
-- [API Reference](docs/api.md)
-- [Development Roadmap](docs/roadmap.md)
+## 📈 Roadmap
+
+- [x] Core context engine implementation
+- [x] Basic agent system
+- [x] Memory store integration
+- [ ] Advanced task planning
+- [ ] Multi-repository support
+- [ ] Team collaboration features
 
 ## 🤝 Contributing
 
@@ -40,7 +69,7 @@ We welcome contributions! Please read our [Contributing Guide](docs/COMMUNITY.md
 
 Check out our project on [DevPost](https://devpost.com/software/kairos-the-context-keeper)!
 
-## 📝 License
+## 📜 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
@@ -49,6 +78,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Project Website](https://turtir-ai.github.io/kairos-context-keeper)
 - [GitHub Repository](https://github.com/turtir-ai/kairos-context-keeper)
 - [DevPost Project](https://devpost.com/software/kairos-the-context-keeper)
+<!-- TODO: Update with the actual Discord invite link -->
 
 ## 📧 Contact
 
