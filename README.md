@@ -101,8 +101,4 @@ For questions and support, please email us at turtirhey@gmail.com
 
 ## About
 
-🇬🇧 **English**  
-Kairos: The Context Keeper is an autonomous development supervisor based on context engineering. It provides a premium project structure for hackathons and developer onboarding, helping teams maintain context and deliver better software faster.
-
-🇹🇷 **Türkçe**  
-Kairos: The Context Keeper, bağlam mühendisliğine dayalı otonom bir geliştirme süpervizörüdür. Hackathon ve geliştirici uyum süreçleri için premium proje yapısı sunar, ekiplerin bağlamı korumalarına ve daha iyi yazılımı daha hızlı teslim etmelerine yardımcı olur. 
+Kairos: The Context Keeper is an autonomous development supervisor based on context engineering. It provides a premium project structure for hackathons and developer onboarding, helping teams maintain context and deliver better software faster. By leveraging advanced AI and memory management techniques, it ensures consistent development practices and preserves critical project knowledge across time. 
