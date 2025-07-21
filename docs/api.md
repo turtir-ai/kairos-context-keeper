@@ -1,5 +1,5 @@
 # API Dokümantasyonu
-
+ 
 ## Temel Endpointler
 - /start: Daemon başlat
 - /status: Durum sorgula
