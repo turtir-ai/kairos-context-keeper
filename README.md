@@ -1,95 +1,55 @@
-# Kairos IDE: The Context Keeper
+# Kairos: The Context Keeper
 
-[English](#english) | [Türkçe](#turkish)
+![Kairos Logo](docs/logo.svg)
 
-![Kairos IDE](docs/banner.png)
+Kairos is an AI-powered development environment that preserves context and enhances productivity. It uses advanced context engineering and agent-based architecture to help developers write better code faster.
 
-## English
+## 🌟 Features
 
-Kairos IDE is an AI-powered development environment that revolutionizes how developers work with code. By preserving context and leveraging advanced AI agents, Kairos enhances productivity and code quality.
+- **Context Engineering**: Advanced context preservation system that learns and adapts to your development patterns
+- **Agent-Based Architecture**: Intelligent agents that handle different aspects of development
+- **DevOps Integration**: Seamless integration with modern DevOps tools and cloud platforms
 
-### Key Features
+## 🚀 Quick Start
 
-- **Context Engineering**: Advanced context preservation system
-- **Agent-Based Architecture**: Specialized AI agents for different tasks
-- **DevOps Integration**: Seamless integration with modern tools
-- **Spec-Driven Development**: From requirements to production
-- **Smart Code Generation**: Context-aware code suggestions
-- **Automated Documentation**: Keep docs in sync with code
+```bash
+# Clone the repository
+git clone https://github.com/turtir-ai/kairos-context-keeper.git
 
-### Getting Started
+# Navigate to the project directory
+cd kairos-context-keeper
 
-1. Join the Beta Program:
-   - Visit [kairos.dev](https://turtir-ai.github.io/kairos-ide)
-   - Request early access
-   - Get your beta key
+# Install dependencies
+pip install -r requirements.txt
 
-2. Installation:
-   ```bash
-   npm install -g @kairos/cli
-   kairos init
-   ```
+# Start the daemon
+python src/daemon.py
+```
 
-3. Configuration:
-   ```yaml
-   # .kairos/config.yml
-   project:
-     name: my-project
-     context:
-       paths: ["src/", "tests/"]
-     agents:
-       enabled: ["link", "retrieval", "execution"]
-   ```
+## 📖 Documentation
 
-### Community
+- [Architecture Overview](docs/architecture.md)
+- [API Reference](docs/api.md)
+- [Development Roadmap](docs/roadmap.md)
 
-- [Discord Community](https://discord.gg/kairos-community)
-- [Twitter](https://twitter.com/turtir_ai)
-- [GitHub Discussions](https://github.com/turtir-ai/kairos-ide/discussions)
+## 🤝 Contributing
 
-## Turkish
+We welcome contributions! Please read our [Contributing Guide](docs/COMMUNITY.md) to get started.
 
-Kairos IDE, geliştiricilerin kodla çalışma şeklini devrimleştiren yapay zeka destekli bir geliştirme ortamıdır. Bağlamı koruyarak ve gelişmiş yapay zeka ajanlarını kullanarak üretkenliği ve kod kalitesini artırır.
+## 🏆 Recognition
 
-### Temel Özellikler
+Featured on [DevPost](https://devpost.com/software/kairos-the-context-keeper) - Check out our project showcase!
 
-- **Bağlam Mühendisliği**: Gelişmiş bağlam koruma sistemi
-- **Ajan Tabanlı Mimari**: Farklı görevler için özelleşmiş yapay zeka ajanları
-- **DevOps Entegrasyonu**: Modern araçlarla sorunsuz entegrasyon
-- **Spec Odaklı Geliştirme**: Gereksinimlerden üretime
-- **Akıllı Kod Üretimi**: Bağlam odaklı kod önerileri
-- **Otomatik Dokümantasyon**: Dokümanları kodla senkronize tutma
+## 📝 License
 
-### Başlangıç
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-1. Beta Programına Katılın:
-   - [kairos.dev](https://turtir-ai.github.io/kairos-ide) adresini ziyaret edin
-   - Erken erişim talep edin
-   - Beta anahtarınızı alın
+## 🔗 Links
 
-2. Kurulum:
-   ```bash
-   npm install -g @kairos/cli
-   kairos init
-   ```
+- [Project Website](https://turtir-ai.github.io/kairos-context-keeper)
+- [GitHub Repository](https://github.com/turtir-ai/kairos-context-keeper)
+- [DevPost Project](https://devpost.com/software/kairos-the-context-keeper)
 
-3. Yapılandırma:
-   ```yaml
-   # .kairos/config.yml
-   project:
-     name: my-project
-     context:
-       paths: ["src/", "tests/"]
-     agents:
-       enabled: ["link", "retrieval", "execution"]
-   ```
+## 📧 Contact
 
-### Topluluk
-
-- [Discord Topluluğu](https://discord.gg/kairos-community)
-- [Twitter](https://twitter.com/turtir_ai)
-- [GitHub Tartışmaları](https://github.com/turtir-ai/kairos-ide/discussions)
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details. 
+For questions and support, please email us at turtirhey@gmail.com 
