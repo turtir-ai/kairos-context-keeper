@@ -2,6 +2,10 @@
 
 ![Kairos Banner](docs/logo.svg)
 
+## About
+
+Kairos: The Context Keeper is an autonomous development supervisor powered by context engineering. It provides a premium project structure for hackathons and developer onboarding, helping teams maintain context and deliver better software faster. By leveraging advanced AI and memory management techniques, it ensures consistent development practices and preserves critical project knowledge across time.
+
 ## 📖 Manifesto: Curing AI's Contextual Amnesia
 
 Modern AI coding assistants are powerful, yet flawed. They suffer from Contextual Amnesia, forgetting the core mission, architectural rules, and historical decisions of a project. This leads to inconsistent, out-of-sync, and often incorrect code.
@@ -57,14 +61,14 @@ cd kairos-context-keeper
 pip install -r requirements.txt
 
 # Run all services with Docker (Recommended)
-# This will start the Kairos Daemon, Neo4j, ChromaDB, and monitoring stack
+# This will start the Kairos Daemon, databases, and monitoring stack
 docker-compose up -d
 
 # Start and interact with the Kairos supervisor
 kairos start
 ```
 
-> For detailed setup instructions and configuration options, please see the [docs/](docs/) directory.
+For detailed setup instructions and configuration options, please see the [docs/](docs/) directory.
 
 ## 📈 Roadmap
 
@@ -97,8 +101,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📧 Contact
 
-For questions and support, please email us at turtirhey@gmail.com
-
-## About
-
-Kairos: The Context Keeper is an autonomous development supervisor based on context engineering. It provides a premium project structure for hackathons and developer onboarding, helping teams maintain context and deliver better software faster. By leveraging advanced AI and memory management techniques, it ensures consistent development practices and preserves critical project knowledge across time. 
+For questions and support, please email us at turtirhey@gmail.com 
