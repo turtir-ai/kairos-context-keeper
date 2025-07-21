@@ -5,17 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Page Not Found - Kairos</title>
     <script>
-        // SPA yönlendirme için
-        (function() {
-            var path = window.location.pathname;
-            var redirectURL = window.location.origin + 
-                (path ? '?currentRoute=' + path.slice(1) : '');
-            window.location.replace(redirectURL);
-        })();
+        sessionStorage.redirect = location.href;
     </script>
+    <meta http-equiv="refresh" content="0;URL='/'">
 </head>
 <body>
     <h1>Redirecting...</h1>
-    <p>If you are not redirected automatically, please click <a href="/">here</a>.</p>
+    <p>If you are not redirected automatically, <a href="/">click here</a>.</p>
+    <script>
+        (function(){
+            var redirect = sessionStorage.redirect;
+            delete sessionStorage.redirect;
+            if (redirect && redirect != location.href) {
+                history.replaceState(null, null, redirect);
+            }
+        })();
+    </script>
 </body>
 </html> 
