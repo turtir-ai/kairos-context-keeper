@@ -1,0 +1,21 @@
+title: Kairos - The Context Keeper
+description: An autonomous development supervisor leveraging context engineering to manage projects from start to finish.
+baseurl: "/kairos-context-keeper"
+url: "https://turtir-ai.github.io"
+
+# Build settings
+markdown: kramdown
+theme: jekyll-theme-minimal
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+
+# Exclude from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - .git/
+  - .github/
+  - .gitignore 
