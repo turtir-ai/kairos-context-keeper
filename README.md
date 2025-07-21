@@ -2,7 +2,7 @@
 
 ![Kairos Logo](docs/logo.svg)
 
-Kairos is an AI-powered development environment that preserves context and enhances productivity. It uses advanced context engineering and agent-based architecture to help developers write better code faster.
+An autonomous development supervisor leveraging context engineering to manage projects from start to finish. Kairos helps teams maintain context, automate routine tasks, and deliver better software faster.
 
 ## 🌟 Features
 
@@ -38,7 +38,7 @@ We welcome contributions! Please read our [Contributing Guide](docs/COMMUNITY.md
 
 ## 🏆 Recognition
 
-Featured on [DevPost](https://devpost.com/software/kairos-the-context-keeper) - Check out our project showcase!
+Check out our project on [DevPost](https://devpost.com/software/kairos-the-context-keeper)!
 
 ## 📝 License
 
