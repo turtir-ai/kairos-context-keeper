@@ -12,8 +12,8 @@
     <link href="/kairos-context-keeper/css/style.css" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="/kairos-context-keeper/logo.svg">
     <script>
-        // Handle SPA routing redirect from 404.html
-        (function(){
+        // Handle SPA routing and 404 redirects
+        (function() {
             var redirect = sessionStorage.redirect;
             delete sessionStorage.redirect;
             if (redirect && redirect != location.href) {
@@ -23,7 +23,7 @@
     </script>
 </head>
 <body class="bg-gray-100">
-    <nav class="bg-white shadow-lg">
+    <nav class="bg-white shadow-lg fixed w-full z-50">
         <div class="max-w-7xl mx-auto px-4">
             <div class="flex justify-between items-center py-4">
                 <div class="flex items-center">
@@ -40,48 +40,81 @@
         </div>
     </nav>
 
-    <header class="bg-gradient-to-r from-blue-500 to-purple-600 text-white py-20">
+    <header class="bg-gradient-to-r from-blue-500 to-purple-600 text-white pt-24 pb-20">
         <div class="max-w-7xl mx-auto px-4 text-center animate-fadeIn">
-            <h1 class="text-4xl font-bold mb-4 hero-title">The Context Keeper</h1>
-            <p class="text-xl mb-8 hero-subtitle">An autonomous development supervisor leveraging context engineering to manage projects from start to finish</p>
-            <div class="flex justify-center space-x-4">
-                <a href="https://devpost.com/software/kairos-the-context-keeper" class="bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100">View Project</a>
-                <a href="#features" class="border-2 border-white text-white px-6 py-3 rounded-lg font-semibold hover:bg-white hover:text-blue-600">Learn More</a>
+            <h1 class="text-5xl font-bold mb-6 hero-title">The Context Keeper</h1>
+            <p class="text-2xl mb-12 hero-subtitle max-w-3xl mx-auto">An autonomous development supervisor leveraging context engineering to manage projects from start to finish</p>
+            <div class="flex justify-center space-x-6">
+                <a href="https://devpost.com/software/kairos-the-context-keeper" class="bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold hover:bg-gray-100 transform hover:scale-105 transition duration-200">View Project</a>
+                <a href="#features" class="border-2 border-white text-white px-8 py-4 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transform hover:scale-105 transition duration-200">Learn More</a>
             </div>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 py-12">
-        <section id="features" class="mb-20">
-            <h2 class="text-3xl font-bold text-center mb-12">Key Features</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 feature-grid">
-                <div class="bg-white p-6 rounded-lg shadow-md feature-card">
-                    <h3 class="text-xl font-semibold mb-4">Context Engineering</h3>
-                    <p>Advanced context preservation system that learns and adapts to your development patterns.</p>
+    <main class="max-w-7xl mx-auto px-4 py-16">
+        <section id="features" class="mb-24">
+            <h2 class="text-4xl font-bold text-center mb-16">Key Features</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-12 feature-grid">
+                <div class="bg-white p-8 rounded-xl shadow-lg hover:shadow-2xl transition duration-300 feature-card transform hover:-translate-y-2">
+                    <h3 class="text-2xl font-semibold mb-4 text-blue-600">Context Engineering</h3>
+                    <p class="text-gray-600">Advanced context preservation system that learns and adapts to your development patterns.</p>
                 </div>
-                <div class="bg-white p-6 rounded-lg shadow-md feature-card">
-                    <h3 class="text-xl font-semibold mb-4">Agent-Based Architecture</h3>
-                    <p>Intelligent agents that handle different aspects of development, from code review to documentation.</p>
+                <div class="bg-white p-8 rounded-xl shadow-lg hover:shadow-2xl transition duration-300 feature-card transform hover:-translate-y-2">
+                    <h3 class="text-2xl font-semibold mb-4 text-purple-600">Agent-Based Architecture</h3>
+                    <p class="text-gray-600">Intelligent agents that handle different aspects of development autonomously.</p>
                 </div>
-                <div class="bg-white p-6 rounded-lg shadow-md feature-card">
-                    <h3 class="text-xl font-semibold mb-4">DevOps Integration</h3>
-                    <p>Seamless integration with modern DevOps tools and cloud platforms.</p>
+                <div class="bg-white p-8 rounded-xl shadow-lg hover:shadow-2xl transition duration-300 feature-card transform hover:-translate-y-2">
+                    <h3 class="text-2xl font-semibold mb-4 text-indigo-600">DevOps Integration</h3>
+                    <p class="text-gray-600">Seamless integration with modern DevOps tools and cloud platforms.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="why" class="mb-24 bg-gray-50 -mx-4 px-4 py-16">
+            <div class="max-w-4xl mx-auto">
+                <h2 class="text-4xl font-bold text-center mb-16">Why Kairos?</h2>
+                <div class="prose prose-lg mx-auto">
+                    <p class="text-xl text-gray-700 mb-8">While tools like Cursor and Copilot are excellent assistants, Kairos operates at a higher level—as a supervisor.</p>
+                    <ul class="space-y-6">
+                        <li class="flex items-start">
+                            <span class="text-blue-600 font-semibold mr-2">•</span>
+                            <span>Proactive vs. Reactive: Kairos doesn't just respond to prompts; it proactively manages the project's context.</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-purple-600 font-semibold mr-2">•</span>
+                            <span>Long-Term Memory: It builds a comprehensive Knowledge Graph of your project.</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-indigo-600 font-semibold mr-2">•</span>
+                            <span>Autonomous Learning: Kairos is a self-improving system that gets better over time.</span>
+                        </li>
+                    </ul>
                 </div>
             </div>
         </section>
 
         <section id="contact" class="text-center">
-            <h2 class="text-3xl font-bold mb-8">Connect With Us</h2>
-            <div class="flex justify-center space-x-6">
-                <a href="https://github.com/turtir-ai/kairos-context-keeper" class="social-link">GitHub</a>
-                <a href="mailto:turtirhey@gmail.com" class="social-link">Email</a>
+            <h2 class="text-4xl font-bold mb-12">Connect With Us</h2>
+            <div class="flex justify-center space-x-8">
+                <a href="https://github.com/turtir-ai/kairos-context-keeper" class="text-gray-700 hover:text-blue-600 transition duration-200 flex items-center">
+                    <svg class="h-6 w-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.09-.745.083-.73.083-.73 1.205.085 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.605-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12"/>
+                    </svg>
+                    GitHub
+                </a>
+                <a href="mailto:turtirhey@gmail.com" class="text-gray-700 hover:text-blue-600 transition duration-200 flex items-center">
+                    <svg class="h-6 w-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                    Email
+                </a>
             </div>
         </section>
     </main>
 
-    <footer class="bg-gray-800 text-white py-8 mt-12">
+    <footer class="bg-gray-800 text-white py-12 mt-24">
         <div class="max-w-7xl mx-auto px-4 text-center">
-            <p>&copy; 2025 Kairos. All rights reserved.</p>
+            <p class="text-gray-400">&copy; 2025 Kairos. All rights reserved.</p>
         </div>
     </footer>
 
