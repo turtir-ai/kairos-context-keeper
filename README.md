@@ -52,23 +52,49 @@ graph TD
 
 ## 🚀 Getting Started
 
+### ⚡ Quick Start (Local Python)
+
 ```bash
 # Clone the repository
 git clone https://github.com/turtir-ai/kairos-context-keeper.git
 cd kairos-context-keeper
 
-# Install dependencies (if not using Docker)
+# Create virtual environment
+python -m venv venv
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # Linux/Mac
+
+# Install dependencies
 pip install -r requirements.txt
 
-# Run all services with Docker (Recommended)
-# This will start the Kairos Daemon, databases, and monitoring stack
-docker-compose up -d
+# Setup environment
+copy .env.example .env  # Windows
+# cp .env.example .env  # Linux/Mac
 
-# Start and interact with the Kairos supervisor
-kairos start
+# Start Kairos
+.\kairos.bat start  # Windows
+# python src/main.py  # Linux/Mac
 ```
 
-For detailed setup instructions and configuration options, please see the [docs/](docs/) directory.
+### 🌐 Access Points
+
+Once Kairos is running:
+
+- **🏠 Dashboard**: http://localhost:8000/dashboard
+- **📚 API Docs**: http://localhost:8000/docs
+- **❤️ Health Check**: http://localhost:8000/health
+
+### 🐳 Full Stack with Docker (Optional)
+
+```bash
+# Run all services (Kairos + Neo4j + Qdrant + Monitoring)
+docker-compose up -d
+
+# Check service status
+docker-compose ps
+```
+
+For detailed setup instructions, see [SETUP.md](SETUP.md).
 
 ## 📈 Roadmap
 

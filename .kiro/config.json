@@ -1,0 +1,20 @@
+{
+  "project": {
+    "name": "My Kairos Project",
+    "version": "1.0.0",
+    "created_at": "2025-07-27T20:43:29.058401"
+  },
+  "agents": {
+    "enabled": [
+      "ResearchAgent",
+      "ExecutionAgent",
+      "GuardianAgent"
+    ],
+    "default_priority": "medium"
+  },
+  "memory": {
+    "neo4j_enabled": true,
+    "qdrant_enabled": true,
+    "backup_enabled": true
+  }
+}

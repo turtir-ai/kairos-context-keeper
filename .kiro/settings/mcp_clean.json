@@ -1,0 +1,66 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "description": "📁 Safe Filesystem Operations - Read, write, list files and directories",
+      "command": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Scripts\\python.exe",
+      "args": ["-m", "mcp.server.stdio", "--name", "filesystem"],
+      "env": {
+        "PYTHONPATH": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper;C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Lib\\site-packages",
+        "PYTHONIOENCODING": "utf-8"
+      },
+      "autoApprove": [
+        "read_file",
+        "write_file", 
+        "list_directory",
+        "create_directory"
+      ],
+      "disabled": false
+    },
+    "git": {
+      "description": "🔧 Git Version Control - Status, diff, log, commit operations",
+      "command": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Scripts\\python.exe",
+      "args": ["-m", "mcp.server.git"],
+      "env": {
+        "PYTHONPATH": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper;C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Lib\\site-packages",
+        "PYTHONIOENCODING": "utf-8"
+      },
+      "autoApprove": [
+        "git_status",
+        "git_diff",
+        "git_log", 
+        "git_add",
+        "git_commit"
+      ],
+      "disabled": false
+    },
+    "web-search": {
+      "description": "🔍 Web Search - Simple web search capabilities",
+      "command": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Scripts\\python.exe",
+      "args": ["-m", "mcp.server.brave_search"],
+      "env": {
+        "BRAVE_SEARCH_API_KEY": "BSAa8TIlTHRPK3I4XF3PLHe8PZVm23k",
+        "PYTHONPATH": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper;C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Lib\\site-packages",
+        "PYTHONIOENCODING": "utf-8"
+      },
+      "autoApprove": [
+        "brave_search"
+      ],
+      "disabled": false
+    },
+    "simple-tools": {
+      "description": "🛠️ Simple Tools - Basic utilities and system info",
+      "command": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Scripts\\python.exe",
+      "args": ["C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\simple-tools-mcp.py"],
+      "env": {
+        "PYTHONPATH": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper;C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Lib\\site-packages",
+        "PYTHONIOENCODING": "utf-8"
+      },
+      "autoApprove": [
+        "get_system_info",
+        "get_current_time",
+        "ping_host"
+      ],
+      "disabled": false
+    }
+  }
+}

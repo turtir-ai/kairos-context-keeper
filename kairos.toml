@@ -1,0 +1,197 @@
+# Kairos Configuration File
+# This file contains all configurable settings for the Kairos system
+
+[general]
+# System-wide settings
+name = "Kairos Context Keeper"
+version = "0.5.0"
+environment = "development"  # development, staging, production
+log_level = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+[daemon]
+# Daemon-specific settings
+host = "0.0.0.0"
+port = 8000
+workers = 4
+max_concurrent_tasks = 10
+task_timeout = 300  # seconds
+heartbeat_interval = 30  # seconds
+
+[llm]
+# LLM Router settings
+default_provider = "ollama"
+default_model = "llama3.1:8b"
+fallback_enabled = true
+cache_enabled = true
+cache_ttl = 3600  # seconds
+
+# Budget management
+[llm.budget]
+enabled = true
+monthly_limit_usd = 50.0  # Monthly budget limit in USD
+project_limits = {}  # Per-project limits, e.g., {"project1": 10.0}
+warning_threshold_percent = 80  # Alert when 80% of budget is used
+auto_fallback_on_limit = true  # Automatically switch to local models when budget is reached
+reset_day = 1  # Day of month to reset budget (1-31)
+
+# Model selection weights
+[llm.selection_weights]
+performance = 0.4
+specialization = 0.3
+availability = 0.2
+cost = 0.1
+
+# Provider-specific settings
+[llm.providers.ollama]
+base_url = "http://localhost:11434"
+timeout = 120
+max_retries = 3
+
+[llm.providers.gemini]
+api_key = "${GEMINI_API_KEY}"
+model = "gemini-1.5-flash"
+max_tokens = 32768
+
+[llm.providers.openrouter]
+api_key = "${OPENROUTER_API_KEY}"
+base_url = "https://openrouter.ai/api/v1"
+
+[database]
+# PostgreSQL settings
+[database.postgresql]
+host = "localhost"
+port = 5432
+database = "kairos_db"
+user = "kairos_user"
+password = "${DB_PASSWORD}"
+pool_size = 20
+max_overflow = 10
+
+# Neo4j settings
+[database.neo4j]
+uri = "bolt://localhost:7687"
+user = "neo4j"
+password = "KairosSecure2025!"
+encrypted = false
+
+# Qdrant settings
+[database.qdrant]
+host = "localhost"
+port = 6333
+collection_name = "kairos_vectors"
+vector_size = 1536
+
+[cache]
+# Redis settings
+[cache.redis]
+url = "redis://localhost:6379"
+max_connections = 50
+decode_responses = true
+socket_keepalive = true
+socket_timeout = 5
+
+[monitoring]
+# Performance monitoring
+enabled = true
+metrics_retention_days = 30
+alert_thresholds = { cpu = 80, memory = 85, error_rate = 5 }
+
+# OpenTelemetry settings
+[monitoring.opentelemetry]
+enabled = true
+endpoint = "http://localhost:4317"
+service_name = "kairos-daemon"
+trace_sample_rate = 0.1
+metrics_export_interval = 60
+
+# Prometheus settings
+[monitoring.prometheus]
+enabled = true
+port = 9091
+path = "/metrics"
+
+[security]
+# Security settings
+jwt_secret = "${JWT_SECRET}"
+jwt_algorithm = "HS256"
+jwt_expiration = 86400  # 24 hours
+api_rate_limit = 100  # requests per minute
+enable_cors = true
+allowed_origins = ["http://localhost:3000", "http://localhost:5173"]
+
+[plugins]
+# Plugin system settings
+enabled = true
+directory = "src/plugins"
+auto_load = true
+allowed_permissions = ["internet_access", "file_access", "database_access"]
+
+# Plugin-specific configurations
+[plugins.weather]
+api_key = "${WEATHER_API_KEY}"
+cache_ttl = 1800
+
+[fine_tuning]
+# Fine-tuning settings
+enabled = true
+min_samples = 50
+batch_size = 4
+learning_rate = 0.0002
+num_epochs = 3
+adapter_path = "models/lora_adapters"
+auto_train_threshold = 100  # Trigger training after N failed tasks
+
+[multi_tenancy]
+# Multi-project support
+enabled = true
+project_isolation = true
+default_project = "default"
+max_projects_per_user = 10
+
+[kubernetes]
+# Kubernetes deployment settings
+namespace = "kairos"
+replicas = 3
+resource_limits = { cpu = "2", memory = "4Gi" }
+resource_requests = { cpu = "500m", memory = "1Gi" }
+health_check_path = "/health"
+readiness_check_path = "/ready"
+
+[observability]
+# Grafana settings
+[observability.grafana]
+url = "http://localhost:3000"
+dashboard_uid = "kairos-main"
+admin_user = "admin"
+admin_password = "${GRAFANA_PASSWORD}"
+
+# Jaeger settings
+[observability.jaeger]
+enabled = false
+agent_host = "localhost"
+agent_port = 6831
+
+[features]
+# Feature flags
+autonomous_learning = true
+plugin_system = true
+multi_project = true
+advanced_monitoring = true
+kubernetes_ready = false
+
+[api]
+# API settings
+enable_swagger = true
+swagger_path = "/docs"
+enable_redoc = true
+redoc_path = "/redoc"
+
+[email]
+# Email notifications (for alerts)
+enabled = false
+smtp_host = "smtp.gmail.com"
+smtp_port = 587
+smtp_user = "${SMTP_USER}"
+smtp_password = "${SMTP_PASSWORD}"
+from_address = "kairos@example.com"
+alert_recipients = ["admin@example.com"]

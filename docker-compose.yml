@@ -33,10 +33,30 @@ services:
     volumes:
       - graph_data:/data
     environment:
-      - NEO4J_AUTH=neo4j/kairos
+      - NEO4J_AUTH=neo4j/KairosSecure2025!
       - NEO4J_dbms_memory_pagecache_size=1G
       - NEO4J_dbms_memory_heap_initial__size=1G
       - NEO4J_dbms_memory_heap_max__size=1G
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/db/migrations:/docker-entrypoint-initdb.d
+    environment:
+      - POSTGRES_DB=kairos_db
+      - POSTGRES_USER=kairos_user
+      - POSTGRES_PASSWORD=secure_password
 
   prometheus:
     image: prom/prometheus:latest
@@ -61,5 +81,7 @@ volumes:
   data:
   vector_data:
   graph_data:
+  redis_data:
+  postgres_data:
   prometheus_data:
-  grafana_data: 
+  grafana_data:

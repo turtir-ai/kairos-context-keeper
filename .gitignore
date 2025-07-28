@@ -5,6 +5,15 @@ proje.md
 .kiro/secrets/
 .cursor/mcp.json
 
+# API keys and sensitive data
+.kiro/settings/mcp_backup.json
+.kiro/settings/*backup*.json
+*.token
+*_token.json
+amazon-q-auth-token.json
+api_key_*
+*_keys.json
+
 # Python
 __pycache__/
 *.py[cod]

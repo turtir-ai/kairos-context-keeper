@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "kairos": {
+      "command": "python",
+      "args": ["C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\src\\mcp\\kairos_mcp_final.py"],
+      "env": {
+        "PYTHONPATH": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\src",
+        "KAIROS_HOME": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper"
+      }
+    }
+  }
+}

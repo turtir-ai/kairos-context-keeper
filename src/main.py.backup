@@ -1,0 +1,1565 @@
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+import uvicorn
+from datetime import datetime, timedelta
+import logging
+import asyncio
+import random
+# Handle imports for both module and direct execution
+import sys
+import os
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    # Try relative imports first (when run as module)
+    from .api.websocket_manager import WebSocketManager
+    from .api.websocket_endpoints import websocket_router
+    from .api.live_endpoints import router as live_router
+except ImportError:
+    # Fall back to absolute imports (when run directly)
+    from api.websocket_manager import WebSocketManager
+    from api.websocket_endpoints import websocket_router
+    from api.live_endpoints import router as live_router
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Define async task references
+periodic_stats_task = None
+# Initialize agent_coordinator directly from its module
+try:
+    from .orchestration.agent_coordinator import agent_coordinator
+except ImportError:
+    from orchestration.agent_coordinator import agent_coordinator
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifecycle"""
+    global periodic_stats_task, agent_coordinator
+    
+    # Startup
+    logger.info("🚀 Initializing Kairos system...")
+    
+    try:
+        # Initialize WebSocket manager first
+        try:
+            from .api.websocket_manager import websocket_manager
+        except ImportError:
+            from api.websocket_manager import websocket_manager
+        logger.info("🌐 WebSocket manager initialized")
+        
+        # Initialize agent coordinator and register agents
+        try:
+            try:
+                from .orchestration.agent_coordinator import agent_coordinator
+            except ImportError:
+                from orchestration.agent_coordinator import agent_coordinator
+            logger.info("📋 Agent coordinator initialized")
+            
+            # Register all available agents
+            try:
+                try:
+                    from .agents.link_agent import LinkAgent
+                except ImportError:
+                    from agents.link_agent import LinkAgent
+                link_agent = LinkAgent()
+                agent_coordinator.register_agent("LinkAgent", link_agent, ["context-building", "linking"])
+                logger.info("🔗 LinkAgent registered")
+            except Exception as e:
+                logger.warning(f"⚠️ LinkAgent not available: {e}")
+                
+            try:
+                try:
+                    from .agents.research_agent import ResearchAgent
+                except ImportError:
+                    from agents.research_agent import ResearchAgent
+                research_agent = ResearchAgent()
+                agent_coordinator.register_agent("ResearchAgent", research_agent, ["research", "analysis"])
+                logger.info("🔍 ResearchAgent registered")
+            except Exception as e:
+                logger.warning(f"⚠️ ResearchAgent not available: {e}")
+                
+            try:
+                try:
+                    from .agents.execution_agent import ExecutionAgent
+                except ImportError:
+                    from agents.execution_agent import ExecutionAgent
+                execution_agent = ExecutionAgent()
+                agent_coordinator.register_agent("ExecutionAgent", execution_agent, ["execution", "commands"])
+                logger.info("⚡ ExecutionAgent registered")
+            except Exception as e:
+                logger.warning(f"⚠️ ExecutionAgent not available: {e}")
+                
+            try:
+                try:
+                    from .agents.retrieval_agent import RetrievalAgent
+                except ImportError:
+                    from agents.retrieval_agent import RetrievalAgent
+                retrieval_agent = RetrievalAgent()
+                agent_coordinator.register_agent("RetrievalAgent", retrieval_agent, ["retrieval", "memory"])
+                logger.info("📚 RetrievalAgent registered")
+            except Exception as e:
+                logger.warning(f"⚠️ RetrievalAgent not available: {e}")
+                
+            try:
+                try:
+                    from .agents.guardian_agent import GuardianAgent
+                except ImportError:
+                    from agents.guardian_agent import GuardianAgent
+                guardian_agent = GuardianAgent()
+                agent_coordinator.register_agent("GuardianAgent", guardian_agent, ["validation", "security"])
+                logger.info("🛡️ GuardianAgent registered")
+            except Exception as e:
+                logger.warning(f"⚠️ GuardianAgent not available: {e}")
+            
+            # Inject WebSocket manager into coordinator
+            agent_coordinator.websocket_manager = websocket_manager
+            logger.info("🔗 WebSocket manager connected to Agent Coordinator")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Agent coordinator not available: {e}")
+        
+        # Try to initialize AI router
+        try:
+            try:
+                from .llm_router import LLMRouter
+            except ImportError:
+                from llm_router import LLMRouter
+            router = LLMRouter()
+            logger.info("🤖 AI Router initialized")
+        except Exception as e:
+            logger.warning(f"⚠️ AI Router not available: {e}")
+        
+        # Start periodic system stats broadcasting
+        periodic_stats_task = asyncio.create_task(periodic_stats_broadcast())
+        logger.info("📊 Periodic stats broadcasting started")
+        
+        # Initialize project manager
+        try:
+            try:
+                from .db.db_manager import DatabaseManager
+                from .api.auth import project_manager
+            except ImportError:
+                from db.db_manager import DatabaseManager
+                from api.auth import project_manager
+            
+            db_manager = DatabaseManager()
+            await db_manager.initialize_database()
+            
+            # Initialize project manager with database pool
+            await project_manager.init_db_pool(db_manager.db_pool)
+            logger.info("🏗️ Project management system initialized")
+        except Exception as e:
+            logger.error(f"❌ Database connection failed: {e}")
+            logger.warning(f"⚠️ Project management not available: {e}")
+        
+        # Start auto task scheduler
+        auto_scheduler_task = asyncio.create_task(auto_task_scheduler())
+        logger.info("🎯 Auto task scheduler started")
+        
+        logger.info("✨ Kairos system initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"❌ Startup error: {e}")
+        logger.info("🔄 System will continue with basic functionality")
+    
+    yield
+    
+    # Shutdown
+    logger.info("🛑 Shutting down Kairos system...")
+    
+    try:
+        # Cancel periodic stats task
+        if periodic_stats_task:
+            periodic_stats_task.cancel()
+            try:
+                await periodic_stats_task
+            except asyncio.CancelledError:
+                pass
+                
+        # Stop WebSocket background tasks
+        try:
+            from .api.websocket_manager import websocket_manager
+        except ImportError:
+            from api.websocket_manager import websocket_manager
+        await websocket_manager.stop_background_tasks()
+        logger.info("🌐 WebSocket manager stopped")
+        
+        # Additional cleanup can be added here
+        logger.info("✅ Cleanup completed successfully")
+        
+    except Exception as e:
+        logger.error(f"❌ Shutdown error: {e}")
+
+app = FastAPI(
+    title="Kairos: The Context Keeper",
+    description="Autonomous development supervisor powered by context engineering",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Add CORS middleware for frontend integration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "ws://localhost:3000", 
+        "ws://127.0.0.1:3000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include WebSocket router (no prefix to avoid /ws/ws/... paths)
+app.include_router(websocket_router, tags=["websockets"])
+# Include live endpoints router
+app.include_router(live_router, tags=["live"])
+
+# Include memory endpoints
+try:
+    from api.memory_endpoints import router as memory_router
+    app.include_router(memory_router, tags=["memory"])
+    logger.info("🧠 Memory endpoints registered")
+except ImportError:
+    logger.warning("⚠️ Memory endpoints not available")
+
+# Include project management endpoints
+try:
+    from api.projects import router as projects_router
+    app.include_router(projects_router, tags=["projects"])
+    logger.info("🏗️ Project management endpoints registered")
+except ImportError:
+    logger.warning("⚠️ Project management endpoints not available")
+
+# Include configuration endpoints
+try:
+    from api.config import router as config_router
+    app.include_router(config_router, tags=["configuration"])
+    logger.info("⚙️ Configuration endpoints registered")
+except ImportError:
+    logger.warning("⚠️ Configuration endpoints not available")
+
+# Include plugin management endpoints
+try:
+    from api.plugins import router as plugins_router
+    app.include_router(plugins_router, tags=["plugins"])
+    logger.info("🔌 Plugin management endpoints registered")
+except ImportError:
+    logger.warning("⚠️ Plugin management endpoints not available")
+
+@app.get("/")
+async def root():
+    return {
+        "message": "Kairos: The Context Keeper is running!",
+        "timestamp": datetime.now().isoformat(),
+        "status": "active"
+    }
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "services": {
+            "daemon": "running",
+            "memory": "initialized",
+            "agents": "ready"
+        }
+    }
+
+@app.get("/status")
+async def get_status():
+    return {
+        "daemon": "running",
+        "context_engine": "active",
+        "agents": {
+            "link_agent": "ready",
+            "retrieval_agent": "ready",
+            "execution_agent": "ready",
+            "guardian_agent": "ready",
+            "research_agent": "ready"
+        },
+        "memory_systems": {
+            "working_memory": "active",
+            "episodic_memory": "active",
+            "knowledge_graph": "connected",
+            "vector_store": "connected"
+        }
+    }
+
+@app.get("/ai/models")
+async def get_available_models():
+    """Get available AI models"""
+    try:
+        from .llm_router import LLMRouter
+    except ImportError:
+        from llm_router import LLMRouter
+    router = LLMRouter()
+    
+    return {
+        "ollama_models": await router.get_available_ollama_models(),
+        "model_config": router.models,
+        "performance_metrics": router.get_performance_summary()
+    }
+
+@app.post("/ai/generate")
+async def generate_response(request: dict):
+    """Generate AI response using best available model"""
+    try:
+        from .llm_router import LLMRouter
+    except ImportError:
+        from llm_router import LLMRouter
+    
+    prompt = request.get("prompt", "")
+    if not prompt:
+        return {"error": "Prompt is required"}
+        
+    router = LLMRouter()
+    response = await router.generate(prompt)
+    
+    return response
+
+@app.post("/ai/retrieve")
+async def retrieve_information(request: dict):
+    """Retrieve and enhance information using RetrievalAgent via coordinator"""
+    from .orchestration.agent_coordinator import TaskPriority
+    
+    query = request.get("query", "")
+    if not query:
+        return {"error": "Query is required"}
+        
+    # Create and execute retrieval task through coordinator
+    task_id = agent_coordinator.create_task(
+        name="Information Retrieval",
+        agent_type="RetrievalAgent",
+        parameters={"query": query, "method": "retrieve"},
+        priority=TaskPriority.MEDIUM
+    )
+    
+    result = await agent_coordinator.execute_task(task_id)
+    return result if result else {"error": "Retrieval failed"}
+
+@app.post("/agents/execute")
+async def execute_command(request: dict):
+    """Execute a command using ExecutionAgent via coordinator"""
+    from .orchestration.agent_coordinator import TaskPriority
+    
+    command = request.get("command", "")
+    if not command:
+        return {"error": "Command is required"}
+        
+    # Create and execute command execution task through coordinator
+    task_id = agent_coordinator.create_task(
+        name="Command Execution",
+        agent_type="ExecutionAgent",
+        parameters={"command": command, "method": "execute"},
+        priority=TaskPriority.HIGH
+    )
+    
+    result = await agent_coordinator.execute_task(task_id)
+    return result if result else {"error": "Command execution failed"}
+
+@app.post("/agents/validate")
+async def validate_output(request: dict):
+    """Validate output using GuardianAgent via coordinator"""
+    from orchestration.agent_coordinator import agent_coordinator
+    
+    output = request.get("output", "")
+    if not output:
+        return {"error": "Output is required"}
+        
+    # Create and execute validation task through coordinator
+    task_id = agent_coordinator.create_task(
+        name="Output Validation",
+        agent_type="GuardianAgent",
+        parameters={"output": output, "method": "guard"},
+        priority=TaskPriority.HIGH
+    )
+    
+    result = await agent_coordinator.execute_task(task_id)
+    return result if result else {"error": "Validation failed"}
+
+@app.post("/agents/research")
+async def research_topic(request: dict):
+    """Research a topic using ResearchAgent via coordinator"""
+    from orchestration.agent_coordinator import agent_coordinator
+    
+    topic = request.get("topic", "")
+    if not topic:
+        return {"error": "Topic is required"}
+        
+    # Create and execute research task through coordinator
+    task_id = agent_coordinator.create_task(
+        name="Topic Research",
+        agent_type="ResearchAgent",
+        parameters={"topic": topic, "method": "research"},
+        priority=TaskPriority.MEDIUM
+    )
+    
+    result = await agent_coordinator.execute_task(task_id)
+    return result if result else {"error": "Research failed"}
+
+@app.post("/memory/add_node")
+async def add_memory_node(request: dict):
+    """Add a node to the knowledge graph"""
+    from memory.memory_manager import MemoryManager
+
+    node_id = request.get("node_id", "")
+    data = request.get("data", {})
+    node_type = request.get("node_type", "general")
+
+    if not node_id:
+        return {"error": "Node ID is required"}
+
+    memory_manager = MemoryManager()
+    success = memory_manager.semantic_memory.add_node(node_id, data, node_type)
+    
+    return {
+        "success": success,
+        "node_id": node_id,
+        "node_type": node_type,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post("/memory/add_context")
+async def add_context_memory(request: dict):
+    """Add contextual memory"""
+    from memory.memory_manager import MemoryManager
+
+    content = request.get("content", "")
+    context_type = request.get("context_type", "general")
+    metadata = request.get("metadata", {})
+
+    if not content:
+        return {"error": "Content is required"}
+
+    memory_manager = MemoryManager()
+    memory_id = memory_manager.contextual_memory.add_context(content, context_type, metadata)
+    
+    return {
+        "success": memory_id is not None,
+        "memory_id": memory_id,
+        "context_type": context_type,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/memory/query")
+async def api_memory_query(query: str = "*"):
+    """API endpoint for memory queries from frontend with enhanced fallback"""
+    try:
+        from memory.memory_manager import MemoryManager
+        
+        memory_manager = MemoryManager()
+        results = memory_manager.search_knowledge(query, limit=10)
+
+        # Transform results for frontend
+        nodes = []
+        for result in results:
+            # Get node data
+            node_data = result.get("data", {})
+            node_id = result.get("id", f"node_{len(nodes)}")
+            
+            nodes.append({
+                "id": node_id,
+                "label": node_data.get("name", node_data.get("label", result.get("id", "Unknown Node"))),
+                "type": node_data.get("type", result.get("node_type", "general")),
+                "connections": len(result.get("relationships", [])) + 2,
+                "importance": 0.5 + (len(nodes) * 0.05),
+                "data": node_data
+            })
+
+        # Build relationships from the results
+        relationships = []
+        seen_relationships = set()
+        
+        for result in results:
+            node_id = result.get("id")
+            for rel in result.get("relationships", []):
+                rel_key = f"{rel.get('from', node_id)}-{rel.get('to', node_id)}"
+                if rel_key not in seen_relationships:
+                    seen_relationships.add(rel_key)
+                    relationships.append({
+                        "from": rel.get("from", node_id),
+                        "to": rel.get("to", node_id), 
+                        "type": rel.get("type", "related"),
+                        "strength": rel.get("strength", 0.5)
+                    })
+
+        return {
+            "query": query,
+            "nodes": nodes,
+            "relationships": relationships,
+            "count": len(nodes),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Memory query error: {e}")
+        
+        # Enhanced fallback with query-responsive results
+        query_lower = query.lower()
+        
+        all_nodes = [
+            { "id": "kairos", "label": "Kairos System", "type": "system", "connections": 25, "importance": 1.0 },
+            { "id": "react-ui", "label": "React Dashboard", "type": "frontend", "connections": 15, "importance": 0.9 },
+            { "id": "fastapi", "label": "FastAPI Server", "type": "backend", "connections": 20, "importance": 0.95 },
+            { "id": "agents", "label": "AI Agents", "type": "agents", "connections": 18, "importance": 0.9 },
+            { "id": "memory-sys", "label": "Memory Engine", "type": "memory", "connections": 12, "importance": 0.8 },
+            { "id": "orchestrator", "label": "Task Orchestrator", "type": "orchestration", "connections": 14, "importance": 0.85 },
+            { "id": "websocket", "label": "WebSocket Manager", "type": "backend", "connections": 8, "importance": 0.7 },
+            { "id": "monitoring", "label": "Performance Monitor", "type": "monitoring", "connections": 6, "importance": 0.7 }
+        ]
+        
+        # Filter nodes based on query
+        filtered_nodes = []
+        if query == "*" or not query.strip():
+            filtered_nodes = all_nodes
+        else:
+            for node in all_nodes:
+                if (query_lower in node["label"].lower() or 
+                    query_lower in node["type"].lower() or
+                    query_lower in node["id"].lower()):
+                    filtered_nodes.append(node)
+        
+        # If no matches, return some default nodes
+        if not filtered_nodes:
+            filtered_nodes = all_nodes[:4]
+
+        return {
+            "query": query,
+            "nodes": filtered_nodes,
+            "relationships": [
+                { "from": "kairos", "to": "react-ui", "type": "serves", "strength": 0.9 },
+                { "from": "kairos", "to": "fastapi", "type": "runs", "strength": 0.95 },
+                { "from": "fastapi", "to": "agents", "type": "coordinates", "strength": 0.9 },
+                { "from": "agents", "to": "orchestrator", "type": "managed-by", "strength": 0.85 },
+                { "from": "fastapi", "to": "memory-sys", "type": "uses", "strength": 0.8 }
+            ],
+            "count": len(filtered_nodes),
+            "error": str(e),
+            "fallback": True,
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.post("/memory/query_nodes")
+async def query_memory_nodes(request: dict):
+    """Query nodes in the knowledge graph"""
+    from memory.memory_manager import MemoryManager
+
+    query = request.get("query", "")
+    node_type = request.get("node_type")
+    limit = request.get("limit", 10)
+
+    if not query:
+        return {"error": "Query is required"}
+
+    memory_manager = MemoryManager()
+    results = memory_manager.semantic_memory.query_nodes(query, node_type, limit)
+    
+    return {
+        "query": query,
+        "results": results,
+        "count": len(results),
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post("/memory/query_context")
+async def query_context_memory(request: dict):
+    """Query contextual memories"""
+    from memory.memory_manager import MemoryManager
+
+    query = request.get("query", "")
+    context_type = request.get("context_type")
+    limit = request.get("limit", 5)
+
+    if not query:
+        return {"error": "Query is required"}
+
+    memory_manager = MemoryManager()
+    results = memory_manager.contextual_memory.query_context(query, context_type, limit)
+    
+    return {
+        "query": query,
+        "results": results,
+        "count": len(results),
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/monitoring/system-stats")
+async def get_system_stats():
+    """Get current system statistics for dashboard"""
+    import psutil
+    
+    # Get system memory info
+    memory = psutil.virtual_memory()
+    
+    # Get agent stats (mock for now)
+    agents_active = 3  # Will be dynamic later
+    
+    # Get task stats from orchestrator
+    try:
+        orchestration_stats = agent_coordinator.get_coordination_stats()
+        tasks = {
+            "active": orchestration_stats.get("active_tasks", 2),
+            "completed": orchestration_stats.get("completed_tasks", 15),
+            "failed": orchestration_stats.get("failed_tasks", 1)
+        }
+    except:
+        tasks = {"active": 2, "completed": 15, "failed": 1}
+    
+    return {
+        "agents": {"active": agents_active},
+        "memory": {
+            "percent": memory.percent,
+            "total": memory.total,
+            "used": memory.used
+        },
+        "tasks": tasks,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/monitoring/metrics")
+async def get_performance_metrics(time_range: int = 60):
+    """Get performance metrics for specified time range"""
+    from monitoring.performance_tracker import performance_tracker
+    
+    metrics_summary = performance_tracker.get_metrics_summary(time_range)
+    
+    return {
+        "monitoring": metrics_summary,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/monitoring/health")
+async def get_system_health():
+    """Get detailed system health status"""
+    from monitoring.performance_tracker import performance_tracker
+    
+    health_status = performance_tracker.get_health_status()
+    
+    return health_status
+
+@app.get("/monitoring/export")
+async def export_metrics(format: str = "json"):
+    """Export all metrics data"""
+    from monitoring.performance_tracker import performance_tracker
+    
+    if format == "json":
+        exported_data = performance_tracker.export_metrics(format)
+        return {
+            "export_format": format,
+            "data": exported_data,
+            "exported_at": datetime.now().isoformat()
+        }
+    else:
+        return {"error": "Unsupported format. Use 'json'"}
+
+@app.post("/monitoring/cleanup")
+async def cleanup_old_metrics(request: dict):
+    """Clean up old metrics data"""
+    from monitoring.performance_tracker import performance_tracker
+    
+    older_than_hours = request.get("older_than_hours", 24)
+    
+    performance_tracker.cleanup_old_metrics(older_than_hours)
+    
+    return {
+        "success": True,
+        "cleaned_older_than_hours": older_than_hours,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post("/orchestration/create_task")
+async def create_orchestration_task(request: dict):
+    """Create a new task for agent execution"""
+    from .orchestration.agent_coordinator import TaskPriority
+    
+    name = request.get("name", "")
+    agent_type = request.get("agent_type", "")
+    parameters = request.get("parameters", {})
+    priority = request.get("priority", 2)  # MEDIUM
+    
+    if not name or not agent_type:
+        return {"error": "Name and agent_type are required"}
+    
+    task_id = agent_coordinator.create_task(
+        name=name,
+        agent_type=agent_type,
+        parameters=parameters,
+        priority=TaskPriority(priority)
+    )
+    
+    return {
+        "task_id": task_id,
+        "name": name,
+        "agent_type": agent_type,
+        "status": "created",
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post("/orchestration/execute_task/{task_id}")
+async def execute_orchestration_task(task_id: str):
+    """Execute a specific task"""
+    from orchestration.agent_coordinator import agent_coordinator
+    
+    result = await agent_coordinator.execute_task(task_id)
+    
+    return {
+        "task_id": task_id,
+        "execution_result": result,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post("/orchestration/create_workflow")
+async def create_workflow(request: dict):
+    """Create a multi-task workflow"""
+    from orchestration.agent_coordinator import agent_coordinator
+    
+    name = request.get("name", "")
+    description = request.get("description", "")
+    task_definitions = request.get("tasks", [])
+    
+    if not name or not task_definitions:
+        return {"error": "Name and tasks are required"}
+    
+    workflow_id = agent_coordinator.create_workflow(name, description, task_definitions)
+    
+    return {
+        "workflow_id": workflow_id,
+        "name": name,
+        "total_tasks": len(task_definitions),
+        "status": "created",
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post("/orchestration/execute_workflow/{workflow_id}")
+async def execute_workflow(workflow_id: str):
+    """Execute a complete workflow"""
+    from orchestration.agent_coordinator import agent_coordinator
+    
+    result = await agent_coordinator.execute_workflow(workflow_id)
+    
+    return {
+        "workflow_id": workflow_id,
+        "execution_result": result,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/orchestration/stats")
+async def get_orchestration_stats():
+    """Get orchestration system statistics"""
+    from orchestration.agent_coordinator import agent_coordinator
+    
+    stats = agent_coordinator.get_coordination_stats()
+    
+    return {
+        "orchestration_stats": stats,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/orchestration/tasks")
+async def get_api_tasks():
+    """Get all tasks for frontend API with real task history"""
+    global agent_coordinator
+    
+    try:
+        stats = agent_coordinator.get_coordination_stats()
+        queue_status = stats.get("coordination_stats", {}).get("queue_status", {})
+        
+        # Get task history from coordinator
+        task_history = agent_coordinator.get_task_history(limit=20)
+        
+        return {
+            "tasks": {
+                "pending": queue_status.get("pending_tasks", 0),
+                "running": queue_status.get("running_tasks", 0),
+                "completed": queue_status.get("completed_tasks", 0),
+                "failed": queue_status.get("failed_tasks", 0)
+            },
+            "task_history": task_history,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "tasks": {"pending": 0, "running": 0, "completed": 0, "failed": 0},
+            "task_history": [],
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.post("/api/orchestration/tasks")
+async def create_api_task(request: dict):
+    """Create a new task via API"""
+    global agent_coordinator
+    from orchestration.agent_coordinator import TaskPriority
+    
+    try:
+        task_type = request.get("type", "research")
+        description = request.get("description", "")
+        priority_str = request.get("priority", "medium")
+        agent = request.get("agent", "")
+        
+        if not description:
+            return {"error": "Description is required"}
+        
+        # Map priority string to enum
+        priority_map = {
+            "low": TaskPriority.LOW,
+            "medium": TaskPriority.MEDIUM, 
+            "high": TaskPriority.HIGH,
+            "critical": TaskPriority.HIGH
+        }
+        priority = priority_map.get(priority_str, TaskPriority.MEDIUM)
+        
+        # Determine agent type based on task type
+        agent_type_map = {
+            "research": "ResearchAgent",
+            "analysis": "RetrievalAgent", 
+            "execution": "ExecutionAgent",
+            "monitoring": "GuardianAgent"
+        }
+        
+        agent_type = agent if agent else agent_type_map.get(task_type, "ResearchAgent")
+        
+        task_id = agent_coordinator.create_task(
+            name=f"{task_type.title()} Task",
+            agent_type=agent_type,
+            parameters={"description": description, "type": task_type},
+            priority=priority
+        )
+        
+        return {
+            "success": True,
+            "task_id": task_id,
+            "type": task_type,
+            "description": description,
+            "agent_type": agent_type,
+            "priority": priority_str,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.post("/api/orchestration/tasks/{task_id}/execute")
+async def execute_api_task(task_id: str):
+    """Execute a specific task via API"""
+    global agent_coordinator
+    
+    try:
+        result = await agent_coordinator.execute_task(task_id)
+        
+        return {
+            "success": True,
+            "task_id": task_id,
+            "execution_result": result,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "task_id": task_id,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.post("/api/orchestration/tasks/{task_id}/cancel")
+async def cancel_api_task(task_id: str):
+    """Cancel a specific task via API"""
+    global agent_coordinator
+    
+    try:
+        # In a real implementation, we'd have a cancel_task method
+        # For now, just return success
+        
+        return {
+            "success": True,
+            "task_id": task_id,
+            "action": "cancelled",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "task_id": task_id,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/api/orchestration/workflows")
+async def get_api_workflows():
+    """Get all workflows for frontend API"""
+    global agent_coordinator
+    
+    try:
+        stats = agent_coordinator.get_coordination_stats()
+        workflow_status = stats.get("coordination_stats", {}).get("workflow_status", {})
+        
+        return {
+            "workflows": {
+                "total": workflow_status.get("total_workflows", 0),
+                "active": workflow_status.get("active_workflows", 0)
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "workflows": {"total": 0, "active": 0},
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/api/agent/status")
+async def get_api_agent_status():
+    """Get agent status for frontend API"""
+    global agent_coordinator
+    
+    try:
+        stats = agent_coordinator.get_coordination_stats()
+        agents = stats.get("registered_agents", [])
+        
+        return {
+            "agents": {
+                "registered": agents,
+                "active": len(agents),
+                "total": len(agents)
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "agents": {"registered": [], "active": 0, "total": 0},
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/orchestration/task/{task_id}")
+async def get_task_status(task_id: str):
+    """Get status of a specific task"""
+    from orchestration.agent_coordinator import agent_coordinator
+    
+    task_status = agent_coordinator.get_task_status(task_id)
+    
+    if task_status:
+        return {
+            "task_id": task_id,
+            "task_status": task_status,
+            "timestamp": datetime.now().isoformat()
+        }
+    else:
+        return {"error": f"Task {task_id} not found"}
+
+@app.get("/api/memory/stats")
+async def get_memory_stats():
+    """Get unified memory system statistics with enhanced fallback"""
+    try:
+        from memory.memory_manager import MemoryManager
+        
+        memory_manager = MemoryManager()
+        stats = memory_manager.get_memory_stats()
+        
+        # Enhanced memory stats with real system data
+        enhanced_stats = {
+            "memory_stats": {
+                "storage_type": stats.get("semantic_storage", "local"),
+                "neo4j_available": stats.get("neo4j_available", False),
+                "qdrant_available": False,  # Will be implemented later
+                "stats": {
+                    "nodes_created": stats.get("knowledge_graph_stats", {}).get("total_nodes", 0),
+                    "edges_created": stats.get("knowledge_graph_stats", {}).get("total_edges", 0),
+                    "queries_executed": stats.get("manager_stats", {}).get("operations_count", 0),
+                    "last_activity": stats.get("manager_stats", {}).get("last_activity", datetime.now().isoformat())
+                },
+                "storage_size": {
+                    "nodes": stats.get("knowledge_graph_stats", {}).get("total_nodes", 0),
+                    "edges": stats.get("knowledge_graph_stats", {}).get("total_edges", 0),
+                    "context_memories": stats.get("total_memory_items", 0)
+                },
+                "memory_layers": stats.get("manager_stats", {}).get("memory_layers", {}),
+                "node_types": ["system", "architecture", "agents", "memory", "tasks", "ai", "monitoring"],
+                "context_types": ["conversation", "system", "workflow", "knowledge"]
+            },
+            "total_nodes": stats.get("knowledge_graph_stats", {}).get("total_nodes", 6),
+            "total_relationships": stats.get("knowledge_graph_stats", {}).get("total_edges", 5),
+            "memory_usage_mb": round(stats.get("total_memory_items", 0) * 0.1, 1),  # Estimated
+            "query_performance_ms": 15  # Estimated average
+        }
+        
+        return {
+            "status": "success",
+            **enhanced_stats,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Memory stats error: {e}")
+        
+        # Comprehensive fallback with system data
+        fallback_stats = {
+            "memory_stats": {
+                "storage_type": "local",
+                "neo4j_available": False,
+                "qdrant_available": False,
+                "stats": {
+                    "nodes_created": 8,
+                    "edges_created": 7,
+                    "queries_executed": 12,
+                    "last_activity": datetime.now().isoformat()
+                },
+                "storage_size": {
+                    "nodes": 8,
+                    "edges": 7,
+                    "context_memories": 15
+                },
+                "memory_layers": {
+                    "working": {"enabled": True, "items": 5},
+                    "episodic": {"enabled": True, "items": 3},
+                    "semantic": {"enabled": True, "items": 8},
+                    "context": {"enabled": True, "items": 4}
+                },
+                "node_types": ["system", "architecture", "agents", "memory", "tasks", "ai", "monitoring"],
+                "context_types": ["conversation", "system", "workflow", "knowledge"]
+            },
+            "total_nodes": 8,
+            "total_relationships": 7,
+            "memory_usage_mb": 2.3,
+            "query_performance_ms": 18
+        }
+        
+        return {
+            "status": "fallback",
+            "error": str(e),
+            **fallback_stats,
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/agents/status")
+async def get_agents_status():
+    """Get detailed status of all agents via coordinator"""
+    from orchestration.agent_coordinator import agent_coordinator
+    
+    # Get agent status through coordinator instead of direct imports
+    stats = agent_coordinator.get_coordination_stats()
+    registered_agents = stats.get("registered_agents", [])
+    
+    # Get agent instances from coordinator and their status
+    agents = {}
+    for agent_type in registered_agents:
+        agent_instance = agent_coordinator.get_agent(agent_type)
+        if agent_instance:
+            try:
+                # Try to get status if method exists, otherwise provide default
+                if hasattr(agent_instance, 'get_status'):
+                    agents[agent_type.lower().replace('agent', '')] = agent_instance.get_status()
+                else:
+                    agents[agent_type.lower().replace('agent', '')] = {
+                        "name": agent_type,
+                        "status": "ready",
+                        "timestamp": datetime.now().isoformat()
+                    }
+            except Exception as e:
+                agents[agent_type.lower().replace('agent', '')] = {
+                    "name": agent_type,
+                    "status": "error",
+                    "error": str(e),
+                    "timestamp": datetime.now().isoformat()
+                }
+    
+    return {
+        "agents": agents,
+        "total_agents": len(agents),
+        "active_agents": len([a for a in agents.values() if a.get("status") == "ready"]),
+        "registered_agents": registered_agents,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post("/api/agents/{agent_name}/restart")
+async def restart_agent(agent_name: str):
+    """Restart a specific agent"""
+    try:
+        # Simulate agent restart (in a real implementation, you'd restart the actual agent)
+        logger.info(f"Restarting agent: {agent_name}")
+        
+        # Add a small delay to simulate restart time
+        await asyncio.sleep(1)
+        
+        return {
+            "success": True,
+            "agent_name": agent_name,
+            "action": "restarted",
+            "status": "ready",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error restarting agent {agent_name}: {str(e)}")
+        return {
+            "success": False,
+            "agent_name": agent_name,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/api/agents/{agent_name}/logs")
+async def get_agent_logs(agent_name: str, limit: int = 50):
+    """Get logs for a specific agent"""
+    try:
+        # Simulate getting agent logs (in a real implementation, you'd read from actual log files)
+        sample_logs = [
+            {"timestamp": datetime.now().isoformat(), "level": "INFO", "message": f"{agent_name} initialized successfully"},
+            {"timestamp": (datetime.now() - timedelta(minutes=5)).isoformat(), "level": "INFO", "message": f"{agent_name} processed task request"},
+            {"timestamp": (datetime.now() - timedelta(minutes=10)).isoformat(), "level": "DEBUG", "message": f"{agent_name} context updated"},
+            {"timestamp": (datetime.now() - timedelta(minutes=15)).isoformat(), "level": "INFO", "message": f"{agent_name} completed operation"},
+            {"timestamp": (datetime.now() - timedelta(minutes=20)).isoformat(), "level": "WARN", "message": f"{agent_name} retry attempt"},
+        ]
+        
+        return {
+            "success": True,
+            "agent_name": agent_name,
+            "logs": sample_logs[:limit],
+            "total_logs": len(sample_logs),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting logs for agent {agent_name}: {str(e)}")
+        return {
+            "success": False,
+            "agent_name": agent_name,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.post("/api/agents/{agent_name}/configure")
+async def configure_agent(agent_name: str, configuration: dict):
+    """Configure a specific agent with new settings"""
+    try:
+        # Simulate agent configuration (in a real implementation, you'd update agent settings)
+        logger.info(f"Configuring agent: {agent_name} with settings: {configuration}")
+        
+        return {
+            "success": True,
+            "agent_name": agent_name,
+            "action": "configured",
+            "configuration": configuration,
+            "status": "ready",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error configuring agent {agent_name}: {str(e)}")
+        return {
+            "success": False,
+            "agent_name": agent_name,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/ai/test")
+async def test_ai_integration():
+    """Test AI integration with simple queries via coordinator"""
+    from llm_router import LLMRouter
+    from orchestration.agent_coordinator import agent_coordinator
+    
+    router = LLMRouter()
+    
+    # Test simple generation
+    test_prompt = "What is context engineering in software development?"
+    
+    try:
+        # Test LLM Router
+        model_selection = router.select_model(test_prompt)
+        
+        # Test Retrieval Agent through coordinator
+        task_id = agent_coordinator.create_task(
+            name="AI Integration Test",
+            agent_type="RetrievalAgent",
+            parameters={"query": "project architecture", "method": "retrieve"},
+        priority=TaskPriority.LOW
+        )
+        
+        retrieval_result = await agent_coordinator.execute_task(task_id)
+        
+        return {
+            "status": "AI integration working",
+            "ollama_available": len(await router.get_available_ollama_models()) > 0,
+            "available_models": (await router.get_available_ollama_models())[:3],  # Show first 3
+            "model_selection_test": model_selection,
+            "retrieval_test": {
+                "query": retrieval_result.get("query", "project architecture") if retrieval_result else "project architecture",
+                "task_id": task_id,
+                "coordinator_integration": "successful" if retrieval_result else "failed"
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "status": "AI integration error", 
+            "error": str(e),
+            "ollama_available": len(await router.get_available_ollama_models()) > 0
+        }
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard():
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Kairos Dashboard</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body { 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                margin: 0; 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: #333;
+            }
+            .container { 
+                max-width: 1200px;
+                margin: 20px auto;
+                background: white; 
+                padding: 30px; 
+                border-radius: 15px; 
+                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            }
+            h1 { 
+                color: #2c3e50; 
+                border-bottom: 3px solid #3498db; 
+                padding-bottom: 15px;
+                text-align: center;
+                font-size: 2.5em;
+                margin-bottom: 30px;
+            }
+            .status { 
+                padding: 20px; 
+                margin: 15px 0; 
+                border-radius: 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            }
+            .active { 
+                background: linear-gradient(135deg, #d4edda, #c3e6cb); 
+                border: 1px solid #c3e6cb; 
+                color: #155724; 
+            }
+            .info { 
+                background: linear-gradient(135deg, #d1ecf1, #bee5eb); 
+                border: 1px solid #bee5eb; 
+                color: #0c5460; 
+            }
+            .feature { 
+                margin: 10px 0; 
+                padding: 15px; 
+                background: #f8f9fa; 
+                border-left: 4px solid #007bff;
+                border-radius: 5px;
+                transition: all 0.3s ease;
+            }
+            .feature:hover {
+                transform: translateX(10px);
+                box-shadow: 0 5px 15px rgba(0,123,255,0.2);
+            }
+            .metrics-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 20px;
+                margin: 20px 0;
+            }
+            .metric-card {
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                text-align: center;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            }
+            .metric-value {
+                font-size: 2em;
+                font-weight: bold;
+                margin: 10px 0;
+            }
+            .real-time-indicator {
+                display: inline-block;
+                width: 12px;
+                height: 12px;
+                background: #28a745;
+                border-radius: 50%;
+                animation: pulse 2s infinite;
+                margin-right: 8px;
+            }
+            @keyframes pulse {
+                0% { opacity: 1; }
+                50% { opacity: 0.5; }
+                100% { opacity: 1; }
+            }
+            .nav-tabs {
+                display: flex;
+                list-style: none;
+                padding: 0;
+                margin: 20px 0;
+                border-bottom: 2px solid #dee2e6;
+            }
+            .nav-tab {
+                padding: 10px 20px;
+                cursor: pointer;
+                border-bottom: 2px solid transparent;
+                transition: all 0.3s ease;
+            }
+            .nav-tab:hover, .nav-tab.active {
+                border-bottom-color: #007bff;
+                color: #007bff;
+            }
+        </style>
+        <script>
+            function updateDashboard() {
+                fetch('/api/monitoring/system-stats')
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('agents-count').textContent = data.agents.active;
+                        document.getElementById('memory-usage').textContent = data.memory.percent + '%';
+                        document.getElementById('active-tasks').textContent = data.tasks.active;
+                    })
+                    .catch(error => console.log('Update failed:', error));
+            }
+            
+            setInterval(updateDashboard, 5000); // Update every 5 seconds
+            
+            window.onload = function() {
+                updateDashboard();
+            }
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🌌 Kairos: The Context Keeper</h1>
+            <div class="status active">
+                <h3>✅ System Status: ACTIVE</h3>
+                <p>Context engineering supervisor is running and ready to assist your development process.</p>
+            </div>
+            
+            <div class="info">
+                <h3>🧠 Key Features</h3>
+                <div class="feature">📚 Multi-layered Memory System</div>
+                <div class="feature">🤖 Agent Guild Architecture</div>
+                <div class="feature">🔄 Self-Improving AI Pipeline</div>
+                <div class="feature">💻 Hybrid Local+Cloud Infrastructure</div>
+                <div class="feature">🔒 Secure Context Management</div>
+            </div>
+            
+            <div class="info">
+                <h3>🛠️ Available Endpoints</h3>
+                <p><strong>GET /</strong> - Welcome message</p>
+                <p><strong>GET /health</strong> - Health check</p>
+                <p><strong>GET /status</strong> - Detailed status</p>
+                <p><strong>GET /dashboard</strong> - This dashboard</p>
+                <p><strong>GET /docs</strong> - Interactive API documentation</p>
+            </div>
+            
+            <div class="info">
+                <h3>🤖 AI Endpoints</h3>
+                <p><strong>GET /ai/models</strong> - Available AI models</p>
+                <p><strong>POST /ai/generate</strong> - Generate AI response</p>
+                <p><strong>POST /ai/retrieve</strong> - Retrieve & enhance information</p>
+                <p><strong>GET /ai/test</strong> - Test AI integration</p>
+            </div>
+            
+            <div class="info">
+                <h3>👥 Agent Endpoints</h3>
+                <p><strong>GET /agents/status</strong> - Detailed agent status</p>
+                <p><strong>POST /agents/execute</strong> - Execute commands</p>
+                <p><strong>POST /agents/validate</strong> - Validate outputs</p>
+                <p><strong>POST /agents/research</strong> - Research topics</p>
+            </div>
+            
+            <div class="info">
+                <h3>🧠 Memory System Endpoints</h3>
+                <p><strong>GET /memory/stats</strong> - Memory system statistics</p>
+                <p><strong>POST /memory/add_node</strong> - Add knowledge graph node</p>
+                <p><strong>POST /memory/add_context</strong> - Add contextual memory</p>
+                <p><strong>POST /memory/query_nodes</strong> - Query graph nodes</p>
+                <p><strong>POST /memory/query_context</strong> - Query context memories</p>
+            </div>
+            
+            <div class="info">
+                <h3>📊 Monitoring Endpoints</h3>
+                <p><strong>GET /monitoring/metrics</strong> - Performance metrics</p>
+                <p><strong>GET /monitoring/health</strong> - System health status</p>
+                <p><strong>GET /monitoring/export</strong> - Export metrics data</p>
+                <p><strong>POST /monitoring/cleanup</strong> - Clean old metrics</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html_content
+
+async def auto_task_scheduler():
+    """Automatic task scheduler that creates and executes tasks periodically"""
+    global agent_coordinator
+    try:
+        from .orchestration.agent_coordinator import TaskPriority
+    except ImportError:
+        from orchestration.agent_coordinator import TaskPriority
+    logger.info("🎯 Auto task scheduler started")
+    
+    # Predefined task templates
+    task_templates = [
+        {
+            "type": "research",
+            "agent": "ResearchAgent", 
+            "topics": [
+                "Latest AI development trends",
+                "Context engineering best practices",
+                "Software architecture patterns",
+                "Performance optimization techniques",
+                "Security considerations in AI systems"
+            ]
+        },
+        {
+            "type": "analysis", 
+            "agent": "RetrievalAgent",
+            "queries": [
+                "project documentation",
+                "system architecture", 
+                "performance metrics",
+                "error logs analysis",
+                "user feedback patterns"
+            ]
+        },
+        {
+            "type": "monitoring",
+            "agent": "GuardianAgent",
+            "checks": [
+                "System health validation",
+                "Security status check",
+                "Code quality assessment",
+                "Performance monitoring",
+                "Resource utilization check"
+            ]
+        }
+    ]
+    
+    task_counter = 0
+    
+    while True:
+        try:
+            # Wait between tasks (30 seconds to 2 minutes)
+            wait_time = random.randint(30, 120)
+            await asyncio.sleep(wait_time)
+            
+            # Check if we should create a new task (not too many pending)
+            stats = agent_coordinator.get_coordination_stats()
+            queue_status = stats.get("queue_status", {})
+            pending_tasks = queue_status.get("pending_tasks", 0)
+            running_tasks = queue_status.get("running_tasks", 0)
+            
+            # Limit concurrent tasks
+            if (pending_tasks + running_tasks) < 3:
+                # Select random task template
+                template = random.choice(task_templates)
+                task_counter += 1
+                
+                if template["type"] == "research":
+                    topic = random.choice(template["topics"])
+                    description = f"Auto-research: {topic}"
+                    parameters = {"description": description, "type": "research", "topic": topic}
+                    
+                elif template["type"] == "analysis":
+                    query = random.choice(template["queries"])
+                    description = f"Auto-analysis: {query}"
+                    parameters = {"description": description, "type": "analysis", "query": query}
+                    
+                elif template["type"] == "monitoring":
+                    check = random.choice(template["checks"])
+                    description = f"Auto-monitoring: {check}"
+                    parameters = {"description": description, "type": "monitoring", "output": check}
+                
+                # Create task
+                task_id = agent_coordinator.create_task(
+                    name=f"Auto Task {task_counter}: {template['type'].title()}",
+                    agent_type=template["agent"],
+                    parameters=parameters,
+                    priority=random.choice([TaskPriority.LOW, TaskPriority.MEDIUM])
+                )
+                
+                logger.info(f"🤖 Auto-created task {task_id}: {description}")
+                
+                # 70% chance to auto-execute the task
+                if random.random() < 0.7:
+                    await asyncio.sleep(random.randint(5, 15))  # Wait a bit before execution
+                    
+                    try:
+                        result = await agent_coordinator.execute_task(task_id)
+                        if result.get("error"):
+                            logger.warning(f"⚠️ Auto task {task_id} failed: {result['error']}")
+                        else:
+                            logger.info(f"✅ Auto task {task_id} completed successfully")
+                    except Exception as e:
+                        logger.error(f"❌ Auto execution error for task {task_id}: {e}")
+                        
+        except Exception as e:
+            logger.error(f"❌ Auto scheduler error: {e}")
+            await asyncio.sleep(60)  # Wait 1 minute before retrying
+
+async def periodic_stats_broadcast():
+    """Periodically broadcast system stats to WebSocket clients"""
+    from .api.websocket_manager import websocket_manager, WebSocketMessage, MessageType
+    import psutil
+    
+    logger.info("📊 Starting periodic stats broadcast")
+    
+    while True:
+        try:
+            await asyncio.sleep(10)  # Broadcast every 10 seconds
+            
+            if len(websocket_manager.active_connections) > 0:
+                # Get current system stats
+                memory = psutil.virtual_memory()
+                
+                stats_data = {
+                    "agents": {"active": 3},
+                    "memory": {
+                        "percent": memory.percent,
+                        "total": memory.total,
+                        "used": memory.used
+                    },
+                    "tasks": {"active": 2, "completed": 15, "failed": 1},
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                # Create WebSocket message
+                message = WebSocketMessage(
+                    message_type=MessageType.SYSTEM_METRICS,
+                    data=stats_data,
+                    timestamp=datetime.now()
+                )
+                
+                # Broadcast to all connected clients
+                await websocket_manager.broadcast_message(message)
+                logger.debug(f"📊 Broadcasted stats to {len(websocket_manager.active_connections)} clients")
+            
+        except Exception as e:
+            logger.error(f"❌ Stats broadcast error: {e}")
+            await asyncio.sleep(30)  # Wait longer if error
+
+
+if __name__ == "__main__":
+    print("🌌 Kairos: The Context Keeper başlatılıyor...")
+    print("📊 Dashboard: http://localhost:8000/dashboard")
+    print("📚 API Docs: http://localhost:8000/docs")
+    print("⚡ Frontend: http://localhost:3000")
+    uvicorn.run(app, host="0.0.0.0", port=8000)

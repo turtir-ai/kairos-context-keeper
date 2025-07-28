@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "kairos": {
+      "description": "🚀 Kairos MCP Server v1.0 - Context as a Service",
+      "command": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Scripts\\python.exe",
+      "args": ["C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\src\\mcp\\kairos_mcp_server_simple.py"],
+      "env": {
+        "PYTHONPATH": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper;C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Lib\\site-packages",
+        "PYTHONIOENCODING": "utf-8",
+        "PATH": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Scripts;%PATH%"
+      },
+      "autoApprove": [
+        "kairos.getProjectConstitution",
+        "kairos.getSystemHealth",
+        "kairos.getContext"
+      ],
+      "disabled": false
+    }
+  }
+}

@@ -1,11 +1,15 @@
-# Kairos Proje Anayasası
+# Proje Yönlendirme Dokümanı
 
-## Amaç
-Kairos, yazılım geliştirmede bağlamsal bütünlüğü ve uzun süreli hafızayı koruyan bir context engineering supervisor platformudur.
+## Proje Hedefleri
+- Bu alanda projenizin ana hedeflerini belirtin
+- Kairos ajanlarının odaklanması gereken konuları listeleyin
 
-## Temel İlkeler
-- Otonom agent koordinasyonu
-- Katmanlı bağlam yönetimi
-- Hafıza optimizasyonu
-- Agent çıktı denetimi
-- Otonom refleksiyon öğrenmesi 
+## Öncelikler
+1. Yüksek öncelikli görevler
+2. Orta öncelikli görevler  
+3. Düşük öncelikli görevler
+
+## Kısıtlamalar ve Kurallar
+- Güvenlik gereksinimleri
+- Performans hedefleri
+- Kod kalite standartları

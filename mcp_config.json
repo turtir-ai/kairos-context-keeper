@@ -1,0 +1,147 @@
+{
+  "mcpServers": {
+    "kairos": {
+      "description": "🚀 Kairos MCP Server v2.0 - Full Context Intelligence & Orchestration",
+      "command": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Scripts\\python.exe",
+      "args": ["C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\src\\mcp\\kairos_mcp_final.py"],
+      "env": {
+        "PYTHONPATH": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper;C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\src",
+        "PYTHONIOENCODING": "utf-8",
+        "PATH": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Scripts;%PATH%",
+        "KAIROS_HOME": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper",
+        "KAIROS_MODE": "production",
+        "MCP_SERVER_NAME": "kairos",
+        "KAIROS_LOG_LEVEL": "INFO",
+        "CONTEXT_SERVICE_ENABLED": "true",
+        "ORCHESTRATION_SERVICE_ENABLED": "true",
+        "SUPERVISOR_AGENT_ENABLED": "true",
+        "NEO4J_ENABLED": "false",
+        "QDRANT_ENABLED": "false"
+      },
+      "autoApprove": [
+        "kairos.getProjectConstitution",
+        "kairos.getSystemHealth", 
+        "kairos.getContext",
+        "kairos.getNotifications",
+        "kairos.acknowledgeNotification",
+        "kairos.analyzeCode",
+        "kairos.createTask",
+        "kairos.listTasks"
+      ],
+      "disabled": false,
+      "capabilities": {
+        "context": {
+          "description": "Deep context analysis with multi-source aggregation",
+          "features": [
+            "Knowledge graph queries",
+            "Vector database search",
+            "Code analysis",
+            "Historical pattern matching"
+          ]
+        },
+        "orchestration": {
+          "description": "Task and workflow management",
+          "features": [
+            "Task creation and tracking",
+            "Agent coordination",
+            "Workflow automation",
+            "Priority management"
+          ]
+        },
+        "analysis": {
+          "description": "Advanced code and project analysis",
+          "features": [
+            "Dead code detection",
+            "Circular dependency analysis",
+            "Complexity metrics",
+            "Technical debt assessment",
+            "Impact analysis"
+          ]
+        },
+        "notifications": {
+          "description": "Real-time system notifications",
+          "features": [
+            "IDE integration",
+            "Priority-based filtering",
+            "Action suggestions",
+            "Acknowledgment tracking"
+          ]
+        }
+      },
+      "tools": [
+        {
+          "name": "kairos.getProjectConstitution",
+          "description": "Get project architecture, security policies, and coding standards",
+          "examples": [
+            "Get architecture patterns",
+            "Show security requirements",
+            "List coding standards"
+          ]
+        },
+        {
+          "name": "kairos.getSystemHealth",
+          "description": "Get current system health metrics and service status",
+          "examples": [
+            "Check system status",
+            "Get performance metrics",
+            "Show service health"
+          ]
+        },
+        {
+          "name": "kairos.getContext",
+          "description": "Get enriched context from multiple knowledge sources",
+          "examples": [
+            "Get context for authentication implementation",
+            "Find similar patterns in codebase",
+            "Get best practices for API design"
+          ]
+        },
+        {
+          "name": "kairos.getNotifications",
+          "description": "Get pending system notifications",
+          "examples": [
+            "Show latest notifications",
+            "Get high priority alerts",
+            "Check security warnings"
+          ]
+        },
+        {
+          "name": "kairos.acknowledgeNotification",
+          "description": "Mark a notification as acknowledged",
+          "examples": [
+            "Acknowledge notification by ID",
+            "Clear notification alert"
+          ]
+        },
+        {
+          "name": "kairos.analyzeCode",
+          "description": "Perform deep code analysis using AST and Knowledge Graph",
+          "examples": [
+            "Find dead code in src/agents",
+            "Check for circular dependencies",
+            "Analyze function complexity",
+            "Find technical debt markers"
+          ]
+        },
+        {
+          "name": "kairos.createTask",
+          "description": "Create a new task in the orchestration system",
+          "examples": [
+            "Create security review task",
+            "Add performance optimization task",
+            "Schedule code refactoring"
+          ]
+        },
+        {
+          "name": "kairos.listTasks",
+          "description": "List tasks from the orchestration system",
+          "examples": [
+            "Show all pending tasks",
+            "List high priority tasks",
+            "Get task history"
+          ]
+        }
+      ]
+    }
+  }
+}

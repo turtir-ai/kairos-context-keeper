@@ -1,0 +1,85 @@
+# Prometheus alert rules for Kairos
+groups:
+  - name: kairos_alerts
+    rules:
+      # High CPU usage
+      - alert: KairosHighCPUUsage
+        expr: (process_cpu_seconds_total{job="kairos"} / process_uptime_seconds{job="kairos"}) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kairos high CPU usage"
+          description: "Kairos CPU usage is above 80% for more than 5 minutes"
+
+      # High memory usage
+      - alert: KairosHighMemoryUsage
+        expr: process_resident_memory_bytes{job="kairos"} > 2000000000  # 2GB
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kairos high memory usage"
+          description: "Kairos memory usage is above 2GB for more than 5 minutes"
+
+      # Service down
+      - alert: KairosServiceDown
+        expr: up{job="kairos"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kairos service is down"
+          description: "Kairos service has been down for more than 1 minute"
+
+      # High error rate
+      - alert: KairosHighErrorRate
+        expr: (rate(http_requests_total{job="kairos",code=~"5.."}[5m]) / rate(http_requests_total{job="kairos"}[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kairos high error rate"
+          description: "Kairos error rate is above 10% for more than 2 minutes"
+
+      # Database connection issues
+      - alert: KairosDatabaseConnectionFailed
+        expr: up{job="postgres"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection failed"
+          description: "Cannot connect to PostgreSQL database"
+
+      # Redis connection issues
+      - alert: KairosRedisConnectionFailed
+        expr: up{job="redis"} == 0
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis connection failed"
+          description: "Cannot connect to Redis cache"
+
+  - name: system_alerts
+    rules:
+      # Disk space low
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{job="node"} / node_filesystem_size_bytes{job="node"}) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10%"
+
+      # High system load
+      - alert: HighSystemLoad
+        expr: node_load1{job="node"} > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High system load"
+          description: "System load is above 2 for more than 10 minutes"
