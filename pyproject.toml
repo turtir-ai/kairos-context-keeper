@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kairos-keeper"
+version = "0.1.0"
+authors = [
+  { name="Tuncer Timur", email="turtirhey@gmail.com" },
+]
+description = "Kairos: An autonomous development supervisor powered by Context Engineering."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "asyncpg>=0.29.0",
+    "neo4j>=5.15.0",
+    "qdrant-client>=1.7.0",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "python-multipart>=0.0.6",
+    "pydantic>=2.5.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-dotenv>=1.0.0",
+    "aiofiles>=23.2.1",
+    "psutil>=5.9.0",
+    "tenacity>=8.2.0",
+    "click>=8.1.0",
+    "rich>=13.7.0",
+    "typing-extensions"
+]
+
+[project.scripts]
+kairos = "src.cli:main"
+
+[project.urls]
+"Homepage" = "https://github.com/your-username/kairos-context-keeper"
+"Bug Tracker" = "https://github.com/your-username/kairos-context-keeper/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.md", "*.json", "*.yaml", "*.yml", "*.txt"]

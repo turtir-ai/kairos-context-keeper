@@ -52,6 +52,8 @@ graph TD
 
 ## 🚀 Getting Started
 
+**⚠️ Important:** Before starting Kairos, please ensure that **Docker Desktop is running** on your system. Kairos relies on Docker to manage its database services (Neo4j, Qdrant) for full functionality.
+
 ### ⚡ Quick Start (Local Python)
 
 ```bash
@@ -67,13 +69,16 @@ venv\Scripts\activate  # Windows
 # Install dependencies
 pip install -r requirements.txt
 
+# Install the package in editable mode to make the 'kairos' command available globally
+pip install -e .
+
 # Setup environment
 copy .env.example .env  # Windows
 # cp .env.example .env  # Linux/Mac
 
 # Start Kairos
-.\kairos.bat start  # Windows
-# python src/main.py  # Linux/Mac
+kairos start  # Now works globally from any directory!
+# Alternative: python src/main.py
 ```
 
 ### 🌐 Access Points

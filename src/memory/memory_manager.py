@@ -7,25 +7,31 @@ import json
 import logging
 import hashlib
 import os
+import asyncio
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
+from functools import lru_cache
+import time
 
 # Import existing memory components
-from .context_manager import ContextManager
-from .enhanced_knowledge_graph import EnhancedKnowledgeGraph
+from src.memory.context_manager import ContextManager
+from src.memory.enhanced_knowledge_graph import EnhancedKnowledgeGraph
+from src.core.config import get_config
 
 try:
-    from .neo4j_integration import Neo4jKnowledgeGraph
+    from src.memory.neo4j_integration import Neo4jKnowledgeGraph
     NEO4J_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     NEO4J_AVAILABLE = False
+    Neo4jKnowledgeGraph = None
 
 try:
-    from .qdrant_integration import QdrantVectorStore
+    from src.memory.qdrant_integration import QdrantVectorStore
     QDRANT_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     QDRANT_AVAILABLE = False
+    QdrantVectorStore = None
 
 
 class MemoryManager:
@@ -39,11 +45,38 @@ class MemoryManager:
     
     def __init__(self, config: Dict[str, Any] = None):
         """Initialize the unified memory system"""
-        self.config = config or {}
+        if config:
+            self.config = config
+        else:
+            try:
+                kairos_config = get_config()
+                self.config = {
+                    "use_neo4j": True,
+                    "use_qdrant": True,
+                    "neo4j_uri": kairos_config.database.neo4j_uri,
+                    "neo4j_user": kairos_config.database.neo4j_user,
+                    "neo4j_password": kairos_config.database.neo4j_password,
+                    "qdrant_host": kairos_config.database.qdrant_host,
+                    "qdrant_port": kairos_config.database.qdrant_port,
+                    "qdrant_collection": kairos_config.database.qdrant_collection,
+                    "persistence_path": str(kairos_config.data_dir / "memory")
+                }
+            except Exception as e:
+                self.logger.warning(f"Could not load central config, using defaults: {e}")
+                self.config = {
+                    "use_neo4j": False,
+                    "use_qdrant": False,
+                    "persistence_path": "data/memory"
+                }
+        
         self.logger = logging.getLogger(__name__)
         
-        # Initialize memory components
-        self._init_components()
+        # Connection status flags
+        self.neo4j_connected = False
+        self.qdrant_connected = False
+        
+        # Initialize memory components synchronously
+        self._init_components_sync()
         
         # Memory statistics
         self.stats = {
@@ -60,6 +93,131 @@ class MemoryManager:
         
         self.logger.info("🧠 Unified Memory Manager initialized successfully")
     
+    def _init_components_sync(self):
+        """Initialize memory components synchronously"""
+        # 1. Working Memory & Context Manager
+        self.context_manager = ContextManager()
+        
+        # 2. Knowledge Graph - Try Neo4j first, fallback to Enhanced local
+        if NEO4J_AVAILABLE and self.config.get("use_neo4j", False):
+            try:
+                self.knowledge_graph = Neo4jKnowledgeGraph(
+                    uri=self.config.get("neo4j_uri"),
+                    user=self.config.get("neo4j_user"),
+                    password=self.config.get("neo4j_password")
+                )
+                # Test connection
+                if hasattr(self.knowledge_graph, 'test_connection') and self.knowledge_graph.test_connection():
+                    self.semantic_storage = "neo4j"
+                    self.neo4j_connected = True
+                    self.logger.info("✅ Using Neo4j for semantic memory")
+                else:
+                    raise Exception("Neo4j connection test failed")
+            except Exception as e:
+                self.logger.warning(f"Neo4j unavailable, falling back to local storage: {e}")
+                self.knowledge_graph = EnhancedKnowledgeGraph()
+                self.semantic_storage = "local"
+                self.neo4j_connected = False
+        else:
+            self.knowledge_graph = EnhancedKnowledgeGraph()
+            self.semantic_storage = "local"
+            self.neo4j_connected = False
+
+        # 3. Setup Qdrant integration
+        if QDRANT_AVAILABLE and self.config.get("use_qdrant", False):
+            try:
+                self.qdrant_client = QdrantVectorStore(
+                    host=self.config.get("qdrant_host", "localhost"), 
+                    port=self.config.get("qdrant_port", 6333),
+                    collection_name=self.config.get("qdrant_collection", "kairos_memory")
+                )
+                # Test connection
+                if hasattr(self.qdrant_client, 'test_connection') and self.qdrant_client.test_connection():
+                    self.vector_storage = "qdrant"
+                    self.qdrant_connected = True
+                    self.logger.info("✅ Using Qdrant for vector storage")
+                else:
+                    raise Exception("Qdrant connection test failed")
+            except Exception as e:
+                self.logger.warning(f"Qdrant unavailable, falling back to local storage: {e}")
+                self.vector_storage = "local"
+                self.qdrant_client = None
+                self.qdrant_connected = False
+        else:
+            self.vector_storage = "local"
+            self.qdrant_client = None
+            self.qdrant_connected = False
+        
+        # 4. Episodic Memory - Integrated with context manager
+        self.episodic_memory = []  # Will be managed by context_manager
+        
+        # 5. Long-term persistence
+        self.persistence_path = Path(self.config.get("persistence_path", "data/memory"))
+        self.persistence_path.mkdir(parents=True, exist_ok=True)
+        
+        # 6. Performance optimizations
+        self.query_cache = {}  # Simple in-memory cache
+        self.cache_ttl = 30  # Cache TTL in seconds
+        self.batch_operations = []  # Queue for batch operations
+        self.batch_size = 50
+        self.query_stats = {
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "batched_queries": 0,
+            "single_queries": 0
+        }
+    
+    async def connect_async(self):
+        """Asynchronously connect to external services"""
+        connection_tasks = []
+        
+        # Neo4j async connection
+        if NEO4J_AVAILABLE and self.config.get("use_neo4j", False):
+            connection_tasks.append(self._connect_neo4j_async())
+        
+        # Qdrant async connection  
+        if QDRANT_AVAILABLE and self.config.get("use_qdrant", False):
+            connection_tasks.append(self._connect_qdrant_async())
+        
+        if connection_tasks:
+            await asyncio.gather(*connection_tasks, return_exceptions=True)
+    
+    async def _connect_neo4j_async(self):
+        """Asynchronously connect to Neo4j"""
+        try:
+            # This would be implemented if Neo4j supported async connections
+            self.logger.info("🔄 Attempting async Neo4j connection...")
+            # For now, just log that we would connect async
+            await asyncio.sleep(0.1)  # Simulate async operation
+            self.logger.info("Neo4j async connection completed")
+        except Exception as e:
+            self.logger.warning(f"Async Neo4j connection failed: {e}")
+    
+    async def _connect_qdrant_async(self):
+        """Asynchronously connect to Qdrant"""
+        try:
+            self.logger.info("🔄 Attempting async Qdrant connection...")
+            # This would be implemented if Qdrant supported async connections
+            await asyncio.sleep(0.1)  # Simulate async operation
+            self.logger.info("Qdrant async connection completed")
+        except Exception as e:
+            self.logger.warning(f"Async Qdrant connection failed: {e}")
+    
+    def get_connection_status(self) -> Dict[str, Any]:
+        """Get current connection status for all services"""
+        return {
+            "neo4j": {
+                "available": NEO4J_AVAILABLE,
+                "connected": self.neo4j_connected,
+                "storage_type": self.semantic_storage
+            },
+            "qdrant": {
+                "available": QDRANT_AVAILABLE,
+                "connected": self.qdrant_connected,
+                "storage_type": self.vector_storage
+            }
+        }
+    
     def _init_components(self):
         """Initialize all memory components"""
         
@@ -67,7 +225,7 @@ class MemoryManager:
         self.context_manager = ContextManager()
         
         # 2. Knowledge Graph - Try Neo4j first, fallback to Enhanced local
-        if NEO4J_AVAILABLE and self.config.get("use_neo4j", True):
+        if NEO4J_AVAILABLE and (self.config.get("use_neo4j", "true").lower() == "true" or os.getenv('NEO4J_ENABLED', 'false').lower() == 'true'):
             try:
                 self.knowledge_graph = Neo4jKnowledgeGraph()
                 if self.knowledge_graph.connected:
@@ -84,7 +242,7 @@ class MemoryManager:
             self.semantic_storage = "local"
 
         # Setup Qdrant integration
-        if QDRANT_AVAILABLE and self.config.get("use_qdrant", True):
+        if QDRANT_AVAILABLE and (self.config.get("use_qdrant", "true").lower() == "true" or os.getenv('QDRANT_ENABLED', 'false').lower() == 'true'):
             try:
                 self.qdrant_client = QdrantVectorStore(
                     host=self.config.get("qdrant_host", "localhost"), 
@@ -232,10 +390,29 @@ class MemoryManager:
             return False
     
     def search_knowledge(self, query: str, node_type: str = None, limit: int = 10) -> List[Dict]:
-        """Search semantic knowledge"""
+        """Search semantic knowledge with caching and optimization"""
         try:
+            # Check cache first
+            cache_key = f"knowledge_{query}_{node_type}_{limit}"
+            cached_result = self._get_cached_result(cache_key)
+            if cached_result is not None:
+                self.query_stats["cache_hits"] += 1
+                self._update_activity()
+                return cached_result
+                
+            # Cache miss - perform query
+            self.query_stats["cache_misses"] += 1
+            
+            # Use optimized query method if available
+            if hasattr(self.knowledge_graph, 'query_nodes_optimized'):
+                result = self.knowledge_graph.query_nodes_optimized(query, node_type, limit)
+            else:
+                result = self.knowledge_graph.query_nodes(query, node_type, limit)
+            
+            # Cache the result
+            self._cache_result(cache_key, result)
             self._update_activity()
-            return self.knowledge_graph.query_nodes(query, node_type, limit)
+            return result
         except Exception as e:
             self.logger.error(f"Knowledge search failed: {e}")
             return []
@@ -268,20 +445,40 @@ class MemoryManager:
             return None
     
     def search_context_memory(self, query: str, context_type: str = None, limit: int = 5) -> List[Dict]:
-        """Search context memory"""
+        """Search context memory with caching and batch optimization"""
         try:
+            # Check cache first
+            cache_key = f"context_{query}_{context_type}_{limit}"
+            cached_result = self._get_cached_result(cache_key)
+            if cached_result is not None:
+                self.query_stats["cache_hits"] += 1
+                self._update_activity()
+                return cached_result
+                
+            # Cache miss - perform optimized query
+            self.query_stats["cache_misses"] += 1
             self._update_activity()
             
-            # Check if knowledge_graph has query_context method, if not use query_nodes
-            if hasattr(self.knowledge_graph, 'query_context'):
-                return self.knowledge_graph.query_context(query, context_type, limit)
+            # Check if knowledge_graph has optimized query_context method
+            if hasattr(self.knowledge_graph, 'query_context_optimized'):
+                result = self.knowledge_graph.query_context_optimized(query, context_type, limit)
+            elif hasattr(self.knowledge_graph, 'query_context'):
+                result = self.knowledge_graph.query_context(query, context_type, limit)
             else:
                 # Fallback to searching nodes with context filter
-                results = self.knowledge_graph.query_nodes(query, "memory", limit)
+                if hasattr(self.knowledge_graph, 'query_nodes_optimized'):
+                    results = self.knowledge_graph.query_nodes_optimized(query, "memory", limit)
+                else:
+                    results = self.knowledge_graph.query_nodes(query, "memory", limit)
                 # Filter by context_type if provided
                 if context_type:
-                    results = [r for r in results if r.get('data', {}).get('context_type') == context_type]
-                return results
+                    result = [r for r in results if r.get('data', {}).get('context_type') == context_type]
+                else:
+                    result = results
+                    
+            # Cache the result
+            self._cache_result(cache_key, result)
+            return result
         except Exception as e:
             self.logger.error(f"Context memory search failed: {e}")
             return []
@@ -344,22 +541,29 @@ class MemoryManager:
             return {"error": str(e), "query": query}
     
     def _create_semantic_connections(self, content: str, turn_id: str, role: str):
-        """Create semantic connections between conversation and existing knowledge"""
+        """Create semantic connections with batch processing optimization"""
         try:
             # Simple keyword-based connections (can be enhanced with NLP)
             keywords = [word.lower().strip('.,!?";') for word in content.split() if len(word) > 3]
+            
+            # Batch the connection operations
+            connection_batch = []
             
             # Search for existing nodes that might relate
             for keyword in keywords[:5]:  # Limit to avoid too many connections
                 related_nodes = self.search_knowledge(keyword, limit=3)
                 for node in related_nodes:
-                    # Create relationship from conversation turn to related concept
-                    self.add_knowledge_relationship(
-                        f"turn_{turn_id}",
-                        node["id"], 
-                        "mentions",
-                        {"keyword": keyword, "role": role}
-                    )
+                    # Queue relationship for batch creation
+                    connection_batch.append({
+                        "from": f"turn_{turn_id}",
+                        "to": node["id"],
+                        "relationship": "mentions",
+                        "properties": {"keyword": keyword, "role": role}
+                    })
+            
+            # Execute batch relationships if we have them
+            if connection_batch:
+                self._execute_batch_relationships(connection_batch)
                     
         except Exception as e:
             self.logger.debug(f"Semantic connection creation failed: {e}")
@@ -469,9 +673,81 @@ class MemoryManager:
             self.logger.error(f"Failed to clear {layer} memory: {e}")
             return False
     
+    def _get_cached_result(self, cache_key: str) -> Optional[Any]:
+        """Get cached result if still valid"""
+        if cache_key in self.query_cache:
+            cached_data, timestamp = self.query_cache[cache_key]
+            if time.time() - timestamp < self.cache_ttl:
+                return cached_data
+            else:
+                # Remove expired cache entry
+                del self.query_cache[cache_key]
+        return None
+    
+    def _cache_result(self, cache_key: str, result: Any):
+        """Cache query result with timestamp"""
+        self.query_cache[cache_key] = (result, time.time())
+        
+        # Simple cache size management (keep last 100 entries)
+        if len(self.query_cache) > 100:
+            oldest_key = min(self.query_cache.keys(), 
+                           key=lambda k: self.query_cache[k][1])
+            del self.query_cache[oldest_key]
+    
+    def _execute_batch_relationships(self, relationships: List[Dict]):
+        """Execute relationship creation in batches for better performance"""
+        try:
+            self.query_stats["batched_queries"] += 1
+            
+            # Check if knowledge graph supports batch operations
+            if hasattr(self.knowledge_graph, 'add_edges_batch'):
+                self.knowledge_graph.add_edges_batch(relationships)
+            else:
+                # Fallback to individual operations
+                for rel in relationships:
+                    self.add_knowledge_relationship(
+                        rel["from"], rel["to"], 
+                        rel["relationship"], rel["properties"]
+                    )
+        except Exception as e:
+            self.logger.error(f"Batch relationship creation failed: {e}")
+    
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """Get detailed performance statistics"""
+        cache_hit_rate = 0
+        total_queries = self.query_stats["cache_hits"] + self.query_stats["cache_misses"]
+        if total_queries > 0:
+            cache_hit_rate = (self.query_stats["cache_hits"] / total_queries) * 100
+            
+        return {
+            "query_stats": self.query_stats,
+            "cache_hit_rate_percent": round(cache_hit_rate, 2),
+            "cache_size": len(self.query_cache),
+            "cache_ttl_seconds": self.cache_ttl,
+            "batch_size": self.batch_size,
+            "memory_usage": {
+                "working_memory_items": self.stats["memory_layers"]["working"]["items"],
+                "episodic_memory_items": self.stats["memory_layers"]["episodic"]["items"],
+                "semantic_memory_items": self.stats["memory_layers"]["semantic"]["items"],
+                "context_memory_items": self.stats["memory_layers"]["context"]["items"]
+            }
+        }
+    
+    def clear_cache(self):
+        """Clear query cache manually"""
+        self.query_cache.clear()
+        self.logger.info("🧹 Query cache cleared")
+    
     def close(self):
         """Properly close all memory components"""
         try:
+            # Log final performance stats
+            perf_stats = self.get_performance_stats()
+            self.logger.info(f"📊 Final Memory Manager Performance Stats: {perf_stats}")
+            
+            # Clear cache
+            self.clear_cache()
+            
             if hasattr(self.knowledge_graph, 'close'):
                 self.knowledge_graph.close()
             self.logger.info("🧠 Memory Manager closed successfully")

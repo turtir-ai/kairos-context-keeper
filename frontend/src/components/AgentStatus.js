@@ -49,9 +49,10 @@ const AgentStatus = () => {
       
       if (data.agent_details) {
         // Use agent_details for full information
-        transformedAgents = Object.entries(data.agent_details).map(([type, agent]) => {
+        transformedAgents = Object.entries(data.agent_details).map(([type, agent], index) => {
           const cleanType = type.replace('Agent', '').toLowerCase();
           return {
+            id: type, // Add unique id for key prop
             name: agent.name || type,
             type: cleanType,
             status: agent.status === 'ready' ? 'active' : (agent.status || 'unknown'),
@@ -64,9 +65,10 @@ const AgentStatus = () => {
         });
       } else if (data.agents && data.agents.registered) {
         // Fallback to registered agents list
-        transformedAgents = data.agents.registered.map(agentName => {
+        transformedAgents = data.agents.registered.map((agentName, index) => {
           const cleanType = agentName.replace('Agent', '').toLowerCase();
           return {
+            id: agentName, // Add unique id for key prop
             name: agentName,
             type: cleanType,
             status: 'active',
@@ -88,6 +90,7 @@ const AgentStatus = () => {
       // Mock data for development
       setAgents([
         {
+          id: 'LinkAgent',
           name: 'Link Agent',
           type: 'link',
           status: 'active',
@@ -98,6 +101,7 @@ const AgentStatus = () => {
           memory_usage: 128
         },
         {
+          id: 'ResearchAgent',
           name: 'Research Agent',
           type: 'research',
           status: 'active',
@@ -108,6 +112,7 @@ const AgentStatus = () => {
           memory_usage: 95
         },
         {
+          id: 'ExecutionAgent',
           name: 'Execution Agent',
           type: 'execution',
           status: 'idle',
@@ -118,6 +123,7 @@ const AgentStatus = () => {
           memory_usage: 64
         },
         {
+          id: 'RetrievalAgent',
           name: 'Retrieval Agent',
           type: 'retrieval',
           status: 'active',
@@ -128,6 +134,7 @@ const AgentStatus = () => {
           memory_usage: 156
         },
         {
+          id: 'GuardianAgent',
           name: 'Guardian Agent',
           type: 'guardian',
           status: 'monitoring',
@@ -338,7 +345,7 @@ const AgentStatus = () => {
 
       <div className="agents-grid">
         {agents.map((agent, index) => (
-          <div key={index} className="agent-card">
+          <div key={agent.id || agent.name || index} className="agent-card">
             <div className="agent-header-info">
               <div className="agent-icon">
                 {getAgentTypeIcon(agent.type)}

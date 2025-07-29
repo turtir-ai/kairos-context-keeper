@@ -1,18 +1,24 @@
 import logging
 import requests
+import os
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
-from llm_router import LLMRouter
+from src.llm_router import LLMRouter
 from .base_agent import BaseAgent
-from .tools.research_tools import WebSearchTool, LocalKnowledgeTool, AIAnalysisTool
+
+# Import research tools (optional)
+try:
+    from .tools.research_tools import WebSearchTool, LocalKnowledgeTool, AIAnalysisTool
+    TOOLS_AVAILABLE = True
+except ImportError:
+    TOOLS_AVAILABLE = False
+    WebSearchTool = None
+    LocalKnowledgeTool = None
+    AIAnalysisTool = None
 
 # Import MCP for context management
 try:
-    from ..mcp.model_context_protocol import MCPContext
+    from src.mcp.model_context_protocol import MCPContext
     MCP_AVAILABLE = True
 except ImportError:
     MCP_AVAILABLE = False
@@ -181,6 +187,10 @@ class ResearchAgent(BaseAgent):
     async def _search_external_sources(self, topic: str, research_plan: List[Dict]) -> List[Dict[str, Any]]:
         """Search external sources like Wikipedia and GitHub"""
         findings = []
+        
+        if not TOOLS_AVAILABLE or not WebSearchTool:
+            self.logger.warning("Web search tools not available, skipping external search")
+            return findings
         
         try:
             async with WebSearchTool() as search_tool:

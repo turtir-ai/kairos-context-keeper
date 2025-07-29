@@ -1,5 +1,6 @@
 import logging
 import subprocess
+import asyncio
 import shlex
 import os
 import json
@@ -10,7 +11,7 @@ from .base_agent import BaseAgent
 
 # Import MCP for context management
 try:
-    from ..mcp.model_context_protocol import MCPContext
+    from src.mcp.model_context_protocol import MCPContext
     MCP_AVAILABLE = True
 except ImportError:
     MCP_AVAILABLE = False
@@ -19,7 +20,7 @@ class ExecutionAgent(BaseAgent):
     """Agent responsible for executing tasks and commands provided in the project"""
     
     def __init__(self, mcp_context: Optional['MCPContext'] = None):
-        super().__init__(name="ExecutionAgent", mcp_context)
+        super().__init__(name="ExecutionAgent", mcp_context=mcp_context)
         self.logger = logging.getLogger(__name__)
         
         # Allowed file operations for security
@@ -34,26 +35,37 @@ class ExecutionAgent(BaseAgent):
             'configs/', 'examples/', 'temp/', 'output/'
         }
         
-    def execute(self, command: str) -> Dict[str, str]:
-        """Execute a command and return the result"""
+    async def execute(self, command: str) -> Dict[str, str]:
+        """Execute a command asynchronously and return the result"""
         self.logger.info(f"Executing command: {command}")
         print(f"⚙️ Executing command: {command}")
         
         try:
-            result = subprocess.run(shlex.split(command), capture_output=True, text=True, check=True)
-            self.logger.info(f"Execution successful: {result.stdout[:100]}")
-            return {
-                "status": "success",
-                "output": result.stdout,
-                "executed_at": datetime.now().isoformat()
-            }
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Execution failed: {e.stderr}")
-            return {
-                "status": "failure",
-                "error": e.stderr,
-                "executed_at": datetime.now().isoformat()
-            }
+            # Use asyncio.create_subprocess_shell for non-blocking execution
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                text=True
+            )
+            
+            # Wait for process completion and read output
+            stdout, stderr = await process.communicate()
+            
+            if process.returncode == 0:
+                self.logger.info(f"Execution successful: {stdout[:100]}")
+                return {
+                    "status": "success",
+                    "output": stdout,
+                    "executed_at": datetime.now().isoformat()
+                }
+            else:
+                self.logger.error(f"Execution failed: {stderr}")
+                return {
+                    "status": "failure",
+                    "error": stderr,
+                    "executed_at": datetime.now().isoformat()
+                }
         except Exception as e:
             self.logger.error(f"Unexpected error during execution: {str(e)}")
             return {
@@ -400,7 +412,7 @@ class ExecutionAgent(BaseAgent):
         
         return False
     
-    def execute_with_context(self, command: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def execute_with_context(self, command: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Execute command with additional context from MCP"""
         self.logger.info(f"Executing command with context: {command}")
         
@@ -411,8 +423,8 @@ class ExecutionAgent(BaseAgent):
         if context:
             full_context.update(context)
         
-        # Execute the command
-        result = self.execute(command)
+        # Execute the command asynchronously
+        result = await self.execute(command)
         
         # Add context information to result
         result['context_used'] = full_context

@@ -62,10 +62,16 @@ def start_daemon():
                 # Eski PID dosyasını temizle
                 os.remove(".kairos.pid")
         
+        # UTF-8 encoding zorlaması için environment ayarla
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"  # Python 3.7+ için ek UTF-8 mod
+        
         # Daemon'u arka planda başlat
         process = subprocess.Popen(
             [sys.executable, "src/main.py"], 
             cwd=".",
+            env=env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL

@@ -82,6 +82,16 @@ class Task:
             self.created_at = datetime.now().isoformat()
         if self.dependencies is None:
             self.dependencies = []
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert Task to dictionary with serializable enum values"""
+        task_dict = asdict(self)
+        
+        # Convert enums to their string values for JSON serialization
+        task_dict['priority'] = self.priority.name.lower()
+        task_dict['status'] = self.status.value
+        
+        return task_dict
 
 @dataclass
 class AgentWorkflow:
@@ -159,6 +169,13 @@ class AgentCoordinator:
 
         # WebSocket manager for real-time updates
         self.websocket_manager = None
+        
+        # Message batching system to reduce WebSocket spam
+        self.message_batch = []
+        self.batch_size = 10  # Maximum messages per batch
+        self.batch_interval = 0.1  # 100ms batching interval
+        self.batch_timer = None
+        self.batching_enabled = True
         
         # Database connection for fine-tuning data collection
         self.db_pool = None
@@ -365,9 +382,9 @@ class AgentCoordinator:
             task.error = error_msg
             self.failed_tasks.append(task)
             
-            # Broadcast task failure
+            # Broadcast task failure using batching
             if self.websocket_manager:
-                await self.websocket_manager.broadcast_message(WebSocketMessage(
+                await self.broadcast_task_update(WebSocketMessage(
                     message_type=MessageType.TASK_UPDATE,
                     data={
                         "type": "task_failed",
@@ -476,7 +493,7 @@ class AgentCoordinator:
             
             # Route to appropriate agent method based on task name
             if task.agent_type == "ExecutionAgent":
-                result = agent.execute(task.parameters.get("command", ""))
+                result = await agent.execute(task.parameters.get("command", ""))
             elif task.agent_type == "GuardianAgent":
                 result = agent.guard(task.parameters.get("output", ""))
             elif task.agent_type == "RetrievalAgent":
@@ -1546,11 +1563,97 @@ class AgentCoordinator:
             self.logger.error(f"Failed to get fine-tuning statistics: {e}")
             return {"error": str(e)}
     
+    async def broadcast_task_update(self, message: WebSocketMessage):
+        """Broadcast task update with batching to reduce CPU usage"""
+        if not self.websocket_manager:
+            return
+            
+        if self.batching_enabled:
+            # Add message to batch
+            self.message_batch.append(message)
+            
+            # Check if we should send batch immediately
+            if len(self.message_batch) >= self.batch_size:
+                await self._flush_message_batch()
+            else:
+                # Schedule batch flush if timer not already running
+                if self.batch_timer is None:
+                    self.batch_timer = asyncio.create_task(self._schedule_batch_flush())
+        else:
+            # Send individual message (legacy mode)
+            await self.websocket_manager.broadcast_message(message)
+    
+    async def _schedule_batch_flush(self):
+        """Schedule a batch flush after the configured interval"""
+        try:
+            await asyncio.sleep(self.batch_interval)
+            await self._flush_message_batch()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self.batch_timer = None
+    
+    async def _flush_message_batch(self):
+        """Flush accumulated messages as a single batch"""
+        if not self.message_batch or not self.websocket_manager:
+            return
+            
+        try:
+            # Cancel existing timer if running
+            if self.batch_timer:
+                self.batch_timer.cancel()
+                self.batch_timer = None
+            
+            # Create batch message
+            batch_message = WebSocketMessage(
+                message_type=MessageType.TASK_UPDATE,
+                data={
+                    "type": "batch_task_update",
+                    "messages": [{
+                        "type": msg.message_type.value,
+                        "data": msg.data,
+                        "timestamp": msg.timestamp.isoformat()
+                    } for msg in self.message_batch],
+                    "batch_size": len(self.message_batch)
+                },
+                timestamp=datetime.now()
+            )
+            
+            # Send batch
+            await self.websocket_manager.broadcast_message(batch_message)
+            
+            # Clear batch
+            batch_count = len(self.message_batch)
+            self.message_batch.clear()
+            
+            self.logger.debug(f"📦 Flushed message batch: {batch_count} messages")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to flush message batch: {e}")
+            # Clear batch anyway to prevent accumulation
+            self.message_batch.clear()
+    
+    def set_batching_config(self, enabled: bool = True, batch_size: int = 10, interval_ms: int = 100):
+        """Configure message batching settings"""
+        self.batching_enabled = enabled
+        self.batch_size = batch_size
+        self.batch_interval = interval_ms / 1000.0  # Convert to seconds
+        
+        self.logger.info(f"📦 Message batching configured: enabled={enabled}, batch_size={batch_size}, interval={interval_ms}ms")
+        
+        # If batching is disabled, flush any pending messages
+        if not enabled and self.message_batch:
+            asyncio.create_task(self._flush_message_batch())
+    
     async def close_database_connection(self):
         """Close database connection pool"""
         if self.db_pool:
             await self.db_pool.close()
             self.logger.info("Database connection pool closed")
+        
+        # Flush any pending messages
+        if self.message_batch:
+            await self._flush_message_batch()
 
 # Global coordinator instance
 agent_coordinator = AgentCoordinator()

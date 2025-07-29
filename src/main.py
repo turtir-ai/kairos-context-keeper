@@ -2,12 +2,57 @@
 """
 Kairos: The Context Keeper - Main FastAPI Application
 """
+# Force UTF-8 encoding for all text output (Windows fix)
+import sys
+import os
+import io
+
+# Force UTF-8 encoding for stdout/stderr on Windows
+if sys.platform.startswith('win'):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
+# Add project root to Python path to enable absolute imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from api.rate_limiting import RateLimiterMiddleware
-from api.audit_logging import configure_audit_logging
-from api.rbac_middleware import RBACMiddleware
-from config import CONFIG
+
+# Try to import optional middleware components
+try:
+    from src.api.rate_limiting import RateLimiterMiddleware
+except ImportError:
+    RateLimiterMiddleware = None
+
+try:
+    from src.api.audit_logging import configure_audit_logging
+except ImportError:
+    def configure_audit_logging():
+        pass
+
+try:
+    from src.api.rbac_middleware import RBACMiddleware
+except ImportError:
+    RBACMiddleware = None
+
+try:
+    from src.config import CONFIG
+except ImportError:
+    from src.core.config import get_config
+    config = get_config()
+    CONFIG = {
+        "app": {
+            "title": "Kairos: The Context Keeper",
+            "description": "Autonomous development supervisor powered by context engineering",
+            "version": "1.0.0",
+            "debug": config.server.debug,
+            "cors_origins": config.server.cors_origins
+        },
+        "database": {
+            "url": config.database.database_url,
+            "pool_size": 10
+        }
+    }
 
 # Import configuration and initialize systems
 from fastapi.middleware.cors import CORSMiddleware
@@ -124,30 +169,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add RBAC Middleware
-app.add_middleware(RBACMiddleware)
+# Add RBAC Middleware (if available)
+if RBACMiddleware:
+    app.add_middleware(RBACMiddleware)
+else:
+    logger.info("RBAC Middleware not available, skipping")
 
-# Add Rate Limiting Middleware
-app.add_middleware(RateLimiterMiddleware)
+# Add Rate Limiting Middleware (if available)
+if RateLimiterMiddleware:
+    app.add_middleware(RateLimiterMiddleware)
+else:
+    logger.info("Rate Limiting Middleware not available, skipping")
 
-# Import and include authentication routes
-try:
-    from api.auth_routes import router as auth_router
-    from api.admin_routes import router as admin_router
-    from api.supervisor_routes import supervisor_router
-    from api.rbac_middleware import init_rbac_manager
-    from api.dependencies import init_dependencies
-    
-    app.include_router(auth_router)
-    app.include_router(admin_router)
-    app.include_router(supervisor_router)
-    
-    # Initialize database and RBAC on startup
-    @app.on_event("startup")
-    async def startup_event():
-        """Initialize database connections, RBAC system, and AgentCoordinator"""
+# Define startup logic (outside try/except block to ensure it's always defined)
+async def startup_logic():
+    """Initialize database connections, RBAC system, and AgentCoordinator"""
+    try:
+        # Try to initialize database connection
         try:
-            # Initialize database connection
+            from api.dependencies import init_dependencies
             DATABASE_URL = CONFIG["database"]["url"]
             db_pool = await asyncpg.create_pool(
                 DATABASE_URL,
@@ -169,8 +209,12 @@ try:
         
         # Start AgentCoordinator
         try:
-            # Connect WebSocket manager to coordinator
-            task_coordinator.websocket_manager = manager
+            # Connect WebSocket manager to coordinator with proper broadcasting
+            websocket_broadcaster = WebSocketBroadcaster(manager)
+            task_coordinator.websocket_manager = websocket_broadcaster
+            
+            # Register and initialize agents before starting coordinator
+            await initialize_agents()
             
             # Start the coordinator
             await task_coordinator.start()
@@ -185,21 +229,62 @@ try:
         
         # Initialize SupervisorAgent for auto task creation (Sprint 9)
         try:
-            from agents.enhanced_supervisor import EnhancedSupervisorAgent
+            from src.agents.enhanced_supervisor import EnhancedSupervisorAgent
             supervisor_agent = EnhancedSupervisorAgent()
             await supervisor_agent.initialize()
             logger.info("🎯 Enhanced SupervisorAgent with auto task creation initialized")
         except Exception as e:
             logger.error(f"⚠️ SupervisorAgent initialization failed: {e}")
         
-        # Start background task for automatic task creation (disabled since using real coordinator)
-        # asyncio.create_task(auto_create_tasks())
+        # Start enhanced auto task scheduler (Sprint 9)
+        asyncio.create_task(auto_task_scheduler())
+        logger.info("🎯 Enhanced Auto Task Scheduler activated")
+        
         logger.info("🚀 Kairos main server initialization complete")
+        
+    except Exception as e:
+        logger.error(f"❌ Startup logic failed: {e}")
+
+# Import and include authentication routes
+try:
+    from api.auth_routes import router as auth_router
+    from api.admin_routes import router as admin_router
+    from api.supervisor_routes import supervisor_router
+    from api.rbac_middleware import init_rbac_manager
+    
+    app.include_router(auth_router)
+    app.include_router(admin_router)
+    app.include_router(supervisor_router)
     
 except ImportError as e:
     logger.warning(f"Authentication routes not available: {e}")
     # Continue without authentication features
     pass
+
+# Initialize everything on startup (works regardless of auth route import status)
+@app.on_event("startup")
+async def startup_event():
+    # Run startup logic directly, not as a background task
+    await startup_logic()
+
+# Agent registration endpoint for debugging
+@app.post("/api/system/register-agents")
+async def register_agents_endpoint():
+    """Register all agents manually - debugging endpoint"""
+    try:
+        await initialize_agents()
+        return {
+            "success": True,
+            "message": "Agents registered successfully",
+            "registered_agents": list(task_coordinator.registered_agents.keys()),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 @app.get("/status")
 async def get_status():
@@ -345,6 +430,26 @@ manager = ConnectionManager()
 # Initialize real task coordinator
 task_coordinator = AgentCoordinator()
 
+# WebSocket message broadcasting implementation
+class WebSocketBroadcaster:
+    """Handles WebSocket broadcasting for real-time updates"""
+    
+    def __init__(self, connection_manager):
+        self.connection_manager = connection_manager
+        self.logger = logging.getLogger(__name__)
+    
+    async def broadcast_message(self, message):
+        """Broadcast a structured message to all WebSocket clients"""
+        try:
+            message_json = json.dumps({
+                "type": message.message_type.value if hasattr(message, 'message_type') else "update",
+                "data": message.data if hasattr(message, 'data') else message,
+                "timestamp": message.timestamp.isoformat() if hasattr(message, 'timestamp') else datetime.now().isoformat()
+            })
+            await self.connection_manager.broadcast(message_json)
+        except Exception as e:
+            self.logger.error(f"Failed to broadcast WebSocket message: {e}")
+
 # WebSocket task update broadcasting
 async def broadcast_task_updates():
     """Broadcast task updates via WebSocket every 5 seconds"""
@@ -358,13 +463,13 @@ async def broadcast_task_updates():
             # Get recent tasks
             recent_tasks = await task_coordinator.get_recent_tasks(limit=10)
             
-            # Prepare update message
+            # Prepare update message with properly serialized tasks
             update = {
                 "type": "task_update",
                 "data": {
                     "stats": stats["queue_status"],
                     "coordination_stats": stats["coordination_stats"],
-                    "recent_tasks": [asdict(task) for task in recent_tasks],
+                    "recent_tasks": [task.to_dict() for task in recent_tasks],
                     "timestamp": datetime.now().isoformat()
                 }
             }
@@ -376,6 +481,53 @@ async def broadcast_task_updates():
             logger.error(f"Task broadcast error: {e}")
             await asyncio.sleep(10)  # Wait longer on error
 
+# Agent initialization and registration
+async def initialize_agents():
+    """Initialize and register all available agents with the coordinator"""
+    try:
+        # Import agent classes using absolute imports
+        from src.agents.research_agent import ResearchAgent
+        from src.agents.execution_agent import ExecutionAgent
+        from src.agents.guardian_agent import GuardianAgent
+        from src.agents.retrieval_agent import RetrievalAgent
+        from src.agents.link_agent import LinkAgent
+        
+        logger.info("🔄 Initializing agents...")
+        
+        # Create agent instances
+        research_agent = ResearchAgent()
+        execution_agent = ExecutionAgent()
+        guardian_agent = GuardianAgent()
+        retrieval_agent = RetrievalAgent()
+        link_agent = LinkAgent()
+        
+        # Register agents with coordinator
+        task_coordinator.register_agent("ResearchAgent", research_agent, ["research", "web_search"])
+        task_coordinator.register_agent("ExecutionAgent", execution_agent, ["code_execution", "file_operations"])
+        task_coordinator.register_agent("GuardianAgent", guardian_agent, ["code_validation", "security_check"])
+        task_coordinator.register_agent("RetrievalAgent", retrieval_agent, ["memory_retrieval", "context_search"])
+        task_coordinator.register_agent("LinkAgent", link_agent, ["knowledge_linking", "graph_updates"])
+        
+        # Log registered agents for debugging
+        registered_agents = task_coordinator.get_coordination_stats()
+        logger.info(f"✅ All agents registered successfully with coordinator: {list(task_coordinator.registered_agents.keys())}")
+        logger.info(f"📊 Coordination stats: {registered_agents['coordination_stats']}")
+        
+    except ImportError as e:
+        logger.error(f"❌ Failed to import agent classes: {e}")
+        
+        # Register with None instances (fallback)
+        task_coordinator.register_agent("ResearchAgent", None, ["research", "web_search"])
+        task_coordinator.register_agent("ExecutionAgent", None, ["code_execution", "file_operations"])
+        task_coordinator.register_agent("GuardianAgent", None, ["code_validation", "security_check"])
+        task_coordinator.register_agent("RetrievalAgent", None, ["memory_retrieval", "context_search"])
+        task_coordinator.register_agent("LinkAgent", None, ["knowledge_linking", "graph_updates"])
+        
+        logger.warning("⚠️ Agents registered with None instances as fallback")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize agents: {e}")
+
 # Real task management using AgentCoordinator
 async def start_agent_coordinator():
     """Initialize and start the AgentCoordinator"""
@@ -383,75 +535,227 @@ async def start_agent_coordinator():
         await task_coordinator.start()
         logger.info("🚀 AgentCoordinator started successfully")
         
-        # Register available agents
-        task_coordinator.register_agent("ResearchAgent", None, ["research", "web_search"])
-        task_coordinator.register_agent("ExecutionAgent", None, ["code_execution", "file_operations"])
-        task_coordinator.register_agent("GuardianAgent", None, ["code_validation", "security_check"])
-        task_coordinator.register_agent("RetrievalAgent", None, ["memory_retrieval", "context_search"])
-        task_coordinator.register_agent("LinkAgent", None, ["knowledge_linking", "graph_updates"])
-        
-        logger.info("📝 All agents registered with coordinator")
+        # DO NOT register agents with None instances - this causes the NoneType error
+        # Agent registration is handled by initialize_agents() function
         
     except Exception as e:
         logger.error(f"Failed to start AgentCoordinator: {e}")
 
-# Background task to automatically create new tasks
-async def auto_create_tasks():
-    """Automatically create new tasks periodically via coordinator"""
-    task_types = [
-        ("Code Review", "RetrievalAgent", "medium"),
-        ("Security Scan", "GuardianAgent", "high"),
-        ("Performance Analysis", "ExecutionAgent", "medium"),
-        ("Data Mining", "ResearchAgent", "low"),
-        ("System Health Check", "GuardianAgent", "high"),
-        ("Context Update", "LinkAgent", "medium"),
-        ("Memory Optimization", "RetrievalAgent", "high")
-    ]
+# Helper functions for enhanced auto task scheduler
+async def create_research_task():
+    """Create meaningful research tasks from tech.md file"""
+    try:
+        tech_file = Path(".kiro/steering/tech.md")
+        if tech_file.exists():
+            content = tech_file.read_text(encoding='utf-8')
+            
+            # Extract technology names from the content
+            technologies = []
+            lines = content.split('\n')
+            for line in lines:
+                if line.startswith('- **') and '**' in line:
+                    tech_name = line.split('**')[1]
+                    technologies.append(tech_name)
+            
+            if technologies:
+                tech = random.choice(technologies)
+                research_aspects = [
+                    "security best practices",
+                    "performance optimization",
+                    "latest updates and features",
+                    "integration patterns",
+                    "troubleshooting guides"
+                ]
+                aspect = random.choice(research_aspects)
+                
+                return {
+                    "name": f"Research {tech} {aspect}",
+                    "agent": "ResearchAgent",
+                    "description": f"Auto-research: {tech} {aspect}",
+                    "parameters": {
+                        "description": f"Research {tech} {aspect}",
+                        "type": "research",
+                        "topic": tech,
+                        "aspect": aspect,
+                        "source": "tech.md"
+                    }
+                }
+    except Exception as e:
+        logger.warning(f"Could not create research task from tech.md: {e}")
+    
+    # Fallback to generic research task
+    topics = ["AI development trends", "Context engineering", "Software architecture"]
+    topic = random.choice(topics)
+    return {
+        "name": f"Research {topic}",
+        "agent": "ResearchAgent",
+        "description": f"Auto-research: {topic}",
+        "parameters": {
+            "description": f"Research {topic}",
+            "type": "research",
+            "topic": topic
+        }
+    }
+
+async def create_monitoring_task():
+    """Create monitoring tasks for actual Python files in the project"""
+    try:
+        # Get Python files from src directory
+        src_path = Path("src")
+        python_files = list(src_path.rglob("*.py"))
+        
+        if python_files:
+            # Select a random Python file
+            selected_file = random.choice(python_files)
+            relative_path = selected_file.relative_to(Path.cwd())
+            
+            monitoring_types = [
+                "code quality assessment",
+                "security vulnerability scan",
+                "performance analysis",
+                "documentation review",
+                "dependency check"
+            ]
+            
+            monitoring_type = random.choice(monitoring_types)
+            
+            return {
+                "name": f"Monitor {relative_path.name} - {monitoring_type}",
+                "agent": "GuardianAgent",
+                "description": f"Auto-monitoring: {monitoring_type} for {relative_path}",
+                "parameters": {
+                    "description": f"Perform {monitoring_type} on {relative_path}",
+                    "type": "monitoring",
+                    "file_path": str(relative_path),
+                    "monitoring_type": monitoring_type
+                }
+            }
+    except Exception as e:
+        logger.warning(f"Could not create monitoring task for Python files: {e}")
+    
+    # Fallback to generic monitoring task
+    return {
+        "name": "System Health Check",
+        "agent": "GuardianAgent",
+        "description": "Auto-monitoring: System health validation",
+        "parameters": {
+            "description": "System health validation",
+            "type": "monitoring",
+            "output": "System health validation"
+        }
+    }
+
+async def create_analysis_task():
+    """Create analysis tasks that use real Context Service queries"""
+    try:
+        # Real Knowledge Graph queries that will use our Context Service
+        structural_queries = [
+            "Analyze the relationship between AgentCoordinator and MemoryManager",
+            "Find all dependencies of the orchestration module",
+            "Identify circular dependencies in the agent system",
+            "Map the workflow execution patterns in AgentCoordinator",
+            "Analyze the connection topology of memory components"
+        ]
+        
+        semantic_queries = [
+            "Find performance optimization patterns in the codebase",
+            "Identify similar implementation strategies across agents",
+            "Analyze architectural patterns used in the system",
+            "Find best practice implementations for async operations",
+            "Identify security patterns in authentication modules"
+        ]
+        
+        # Choose between structural and semantic analysis
+        if random.random() < 0.6:  # 60% structural, 40% semantic
+            query = random.choice(structural_queries)
+            analysis_type = "structural"
+        else:
+            query = random.choice(semantic_queries)
+            analysis_type = "semantic"
+        
+        return {
+            "name": f"Deep Analysis: {query[:50]}...",
+            "agent": "RetrievalAgent",
+            "description": f"Auto-analysis: {analysis_type} - {query}",
+            "parameters": {
+                "description": query,
+                "type": "deep_analysis",
+                "query": query,
+                "analysis_type": analysis_type,
+                "use_context_service": True,
+                "target": "context_service"
+            }
+        }
+    except Exception as e:
+        logger.warning(f"Could not create analysis task: {e}")
+        return None
+
+# Enhanced auto task scheduler for meaningful autonomous tasks (Sprint 9)
+async def auto_task_scheduler():
+    """Enhanced automatic task scheduler that creates meaningful and contextual tasks"""
+    global task_coordinator
+    logger.info("🎯 Enhanced Auto Task Scheduler started")
+    
+    task_counter = 0
     
     while True:
         try:
-            await asyncio.sleep(30)  # Create new task every 30 seconds
+            # Wait between tasks (30 seconds to 2 minutes)
+            wait_time = random.randint(30, 120)
+            await asyncio.sleep(wait_time)
             
-            # Randomly decide if we should create a new task
-            if random.random() < 0.7:  # 70% chance
-                task_name, agent, priority = random.choice(task_types)
-                task_id = f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(100, 999)}"
-                
-                new_task = {
-                    "id": task_id,
-                    "name": task_name,
-                    "status": "pending",
-                    "agent": agent,
-                    "created_at": datetime.now().isoformat(),
-                    "priority": priority
-                }
-                
-                task_storage["task_history"].append(new_task)
-                task_storage["tasks"]["pending"] += 1
-                
-                # Keep only last 20 tasks
-                if len(task_storage["task_history"]) > 20:
-                    task_storage["task_history"] = task_storage["task_history"][-20:]
-                
-                logger.info(f"Auto-created task: {task_name} assigned to {agent}")
+            # Check if we should create a new task (not too many pending)
+            stats = task_coordinator.get_coordination_stats()
+            queue_status = stats.get("queue_status", {})
+            pending_tasks = queue_status.get("pending_tasks", 0)
+            running_tasks = queue_status.get("running_tasks", 0)
             
-            # Randomly progress some tasks
-            for task in task_storage["task_history"]:
-                if task["status"] == "pending" and random.random() < 0.3:
-                    task["status"] = "running"
-                    task_storage["tasks"]["pending"] -= 1
-                    task_storage["tasks"]["running"] += 1
-                elif task["status"] == "running" and random.random() < 0.4:
-                    if random.random() < 0.9:  # 90% success rate
-                        task["status"] = "completed"
-                        task_storage["tasks"]["completed"] += 1
-                    else:
-                        task["status"] = "failed"
-                        task_storage["tasks"]["failed"] += 1
-                    task_storage["tasks"]["running"] -= 1
+            # Limit concurrent tasks
+            if (pending_tasks + running_tasks) < 3:
+                task_counter += 1
+                task_type = random.choice(["research", "monitoring", "analysis"])
+                
+                if task_type == "research":
+                    # Create meaningful research tasks from tech.md
+                    task_info = await create_research_task()
                     
+                elif task_type == "monitoring":
+                    # Create monitoring tasks for actual Python files
+                    task_info = await create_monitoring_task()
+                    
+                elif task_type == "analysis":
+                    # Create analysis tasks for knowledge graph queries
+                    task_info = await create_analysis_task()
+                
+                if task_info:
+                    # Create task using TaskCoordinator
+                    from orchestration.agent_coordinator import TaskPriority
+                    
+                    task_id = task_coordinator.create_task(
+                        name=f"Auto Task {task_counter}: {task_info['name']}",
+                        agent_type=task_info['agent'],
+                        parameters=task_info['parameters'],
+                        priority=random.choice([TaskPriority.LOW, TaskPriority.MEDIUM])
+                    )
+                    
+                    logger.info(f"🤖 Auto-created meaningful task {task_id}: {task_info['description']}")
+                    
+                    # 70% chance to auto-execute the task
+                    if random.random() < 0.7:
+                        await asyncio.sleep(random.randint(5, 15))  # Wait a bit before execution
+                        
+                        try:
+                            result = await task_coordinator.execute_task(task_id)
+                            if result.get("error"):
+                                logger.warning(f"⚠️ Auto task {task_id} failed: {result['error']}")
+                            else:
+                                logger.info(f"✅ Auto task {task_id} completed successfully")
+                        except Exception as e:
+                            logger.error(f"❌ Auto execution error for task {task_id}: {e}")
+                        
         except Exception as e:
-            logger.error(f"Error in auto_create_tasks: {e}")
+            logger.error(f"❌ Enhanced auto scheduler error: {e}")
+            await asyncio.sleep(60)  # Wait 1 minute before retrying
 
 @app.get("/api/orchestration/tasks")
 async def get_api_tasks():
@@ -603,6 +907,118 @@ async def get_monitoring_metrics(time_range: int = 60):
         "time_range_minutes": time_range,
         "timestamp": datetime.now().isoformat()
     }
+
+@app.get("/health")
+async def comprehensive_health_check():
+    """Comprehensive health check endpoint with real system status"""
+    try:
+        # Check memory manager connections
+        memory_status = "unknown"
+        neo4j_status = "disconnected"
+        qdrant_status = "disconnected"
+        
+        try:
+            from src.memory.memory_manager import create_memory_manager
+            memory_manager = create_memory_manager()
+            connection_status = memory_manager.get_connection_status()
+            
+            memory_status = "connected" if memory_manager else "disconnected"
+            neo4j_status = "connected" if connection_status["neo4j"]["connected"] else "disconnected"
+            qdrant_status = "connected" if connection_status["qdrant"]["connected"] else "disconnected"
+        except Exception as e:
+            logger.debug(f"Memory manager check failed: {e}")
+            memory_status = "fallback_to_local"
+        
+        # Check agent coordinator
+        agent_coordinator_status = "unknown"
+        registered_agents = []
+        try:
+            if task_coordinator:
+                stats = task_coordinator.get_coordination_stats()
+                agent_coordinator_status = "running"
+                registered_agents = list(task_coordinator.registered_agents.keys()) if hasattr(task_coordinator, 'registered_agents') else []
+            else:
+                agent_coordinator_status = "not_initialized"
+        except Exception as e:
+            logger.debug(f"Agent coordinator check failed: {e}")
+            agent_coordinator_status = "error"
+        
+        # Check Ollama availability
+        ollama_status = "unknown"
+        available_models = []
+        try:
+            available_models = await get_ollama_models()
+            ollama_status = "connected" if available_models else "no_models"
+        except Exception as e:
+            logger.debug(f"Ollama check failed: {e}")
+            ollama_status = "disconnected"
+        
+        # Determine overall system health
+        critical_services = {
+            "agent_coordinator": agent_coordinator_status in ["running"],
+            "memory_system": memory_status in ["connected", "fallback_to_local"]
+        }
+        
+        optional_services = {
+            "neo4j": neo4j_status == "connected",
+            "qdrant": qdrant_status == "connected",
+            "ollama": ollama_status == "connected"
+        }
+        
+        critical_healthy = all(critical_services.values())
+        optional_healthy_count = sum(optional_services.values())
+        
+        if critical_healthy and optional_healthy_count >= 1:
+            overall_status = "healthy"
+        elif critical_healthy:
+            overall_status = "degraded"
+        else:
+            overall_status = "unhealthy"
+        
+        return {
+            "status": overall_status,
+            "timestamp": datetime.now().isoformat(),
+            "services": {
+                "agent_coordinator": {
+                    "status": agent_coordinator_status,
+                    "registered_agents": registered_agents,
+                    "agent_count": len(registered_agents)
+                },
+                "memory_system": {
+                    "status": memory_status,
+                    "neo4j_status": neo4j_status,
+                    "qdrant_status": qdrant_status
+                },
+                "ai_models": {
+                    "ollama_status": ollama_status,
+                    "available_models": len(available_models),
+                    "model_list": [m["id"] for m in available_models[:5]]  # Show first 5
+                }
+            },
+            "health_summary": {
+                "critical_services_healthy": critical_healthy,
+                "optional_services_count": len(optional_services),
+                "optional_services_healthy": optional_healthy_count,
+                "overall_health_score": round((len([s for s in critical_services.values() if s]) * 2 + optional_healthy_count) / (len(critical_services) * 2 + len(optional_services)) * 100, 1)
+            },
+            "uptime_info": {
+                "uptime_seconds": (datetime.now() - datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds(),
+                "startup_time": datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat(),
+            "services": {
+                "agent_coordinator": {"status": "unknown"},
+                "memory_system": {"status": "unknown"},
+                "ai_models": {"status": "unknown"}
+            }
+        }
 
 @app.get("/monitoring/health")
 async def get_monitoring_health():

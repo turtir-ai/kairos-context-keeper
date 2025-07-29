@@ -6,8 +6,17 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from llm_router import LLMRouter
-from agents.base_agent import BaseAgent
+from src.llm_router import LLMRouter
+from src.agents.base_agent import BaseAgent
+
+# Phase 2: Deep Memory Integration
+try:
+    from src.services.context_service import get_enriched_context
+    CONTEXT_SERVICE_AVAILABLE = True
+except ImportError:
+    CONTEXT_SERVICE_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("Context Service not available - using fallback retrieval")
 
 class RetrievalAgent(BaseAgent):
     """Agent responsible for retrieving relevant context and information"""
@@ -54,6 +63,114 @@ class RetrievalAgent(BaseAgent):
         }
         
         return result
+    
+    async def execute(self, task_params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute retrieval task with enhanced context service integration"""
+        task_type = task_params.get("type", "retrieve")
+        
+        if task_type == "deep_analysis" and task_params.get("use_context_service"):
+            return await self._execute_deep_analysis(task_params)
+        else:
+            # Standard retrieval
+            query = task_params.get("query", task_params.get("description", ""))
+            return await self.retrieve(query, task_params)
+    
+    async def _execute_deep_analysis(self, task_params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute deep analysis using Context Service - Phase 2 Implementation"""
+        query = task_params.get("query", task_params.get("description", ""))
+        analysis_type = task_params.get("analysis_type", "general")
+        
+        self.logger.info(f"🧠 Executing deep analysis: {analysis_type} - {query}")
+        
+        if CONTEXT_SERVICE_AVAILABLE:
+            try:
+                # Use Context Service for intelligent retrieval
+                context_response = await get_enriched_context(
+                    query=query,
+                    depth="detailed",
+                    max_tokens=4000,
+                    include_code=True,
+                    include_history=True
+                )
+                
+                # Enhanced result with deep context
+                result = {
+                    "task_type": "deep_analysis",
+                    "analysis_type": analysis_type,
+                    "query": query,
+                    "deep_context": {
+                        "enriched_content": context_response.enriched_context,
+                        "sources": context_response.sources,
+                        "confidence_score": context_response.confidence_score,
+                        "token_count": context_response.token_count,
+                        "cache_hit": context_response.cache_hit,
+                        "generated_at": context_response.generated_at.isoformat()
+                    },
+                    "analysis_summary": f"Deep analysis completed using {len(context_response.sources)} sources",
+                    "actionable_insights": self._extract_actionable_insights(context_response.enriched_context, analysis_type),
+                    "success": True,
+                    "agent": self.name,
+                    "executed_at": datetime.now().isoformat()
+                }
+                
+                self.logger.info(f"✅ Deep analysis completed with confidence: {context_response.confidence_score}")
+                return result
+                
+            except Exception as e:
+                self.logger.error(f"❌ Deep analysis failed: {e}")
+                return {
+                    "task_type": "deep_analysis",
+                    "query": query,
+                    "success": False,
+                    "error": str(e),
+                    "fallback_used": True,
+                    "agent": self.name,
+                    "executed_at": datetime.now().isoformat()
+                }
+        else:
+            # Fallback without Context Service
+            fallback_result = await self.retrieve(query)
+            fallback_result.update({
+                "task_type": "deep_analysis_fallback",
+                "analysis_type": analysis_type,
+                "note": "Context Service unavailable - used standard retrieval"
+            })
+            return fallback_result
+    
+    def _extract_actionable_insights(self, enriched_content: str, analysis_type: str) -> List[str]:
+        """Extract actionable insights from enriched context"""
+        insights = []
+        
+        if analysis_type == "structural":
+            insights = [
+                "Review component relationships for optimization opportunities",
+                "Consider dependency injection improvements",
+                "Evaluate circular dependency risks",
+                "Assess architectural pattern consistency"
+            ]
+        elif analysis_type == "semantic":
+            insights = [
+                "Identify code patterns for standardization",
+                "Review implementation approaches for consistency",
+                "Consider best practice adoption",
+                "Evaluate performance optimization opportunities"
+            ]
+        elif analysis_type == "performance":
+            insights = [
+                "Implement async optimization where applicable",
+                "Review database query efficiency",
+                "Consider caching strategies",
+                "Monitor resource usage patterns"
+            ]
+        else:
+            insights = [
+                "Review system architecture for improvements",
+                "Consider performance and security implications",
+                "Evaluate maintainability factors",
+                "Plan incremental enhancements"
+            ]
+        
+        return insights
         
     def _search_local_knowledge(self, query: str) -> List[Dict[str, Any]]:
         """Search through local knowledge base"""

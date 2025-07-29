@@ -6,12 +6,8 @@ import json
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from pathlib import Path
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
-from .base_agent import BaseAgent
-from llm_router import LLMRouter
+from src.agents.base_agent import BaseAgent
+from src.llm_router import LLMRouter
 
 # Import MCP for context management
 try:

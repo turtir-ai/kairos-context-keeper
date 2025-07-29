@@ -12,7 +12,7 @@ from decimal import Decimal, ROUND_HALF_UP
 import json
 import asyncpg
 import redis.asyncio as redis
-from ..config_loader import load_config
+from src.core.config import get_config
 
 @dataclass
 class BudgetTransaction:
@@ -48,7 +48,35 @@ class BudgetManager:
     
     def __init__(self, config: Dict[str, Any] = None, db_pool=None, redis_client=None):
         self.logger = logging.getLogger(__name__)
-        self.config = config or load_config()
+        if config:
+            self.config = config
+        else:
+            try:
+                kairos_config = get_config()
+                self.config = {
+                    'llm': {
+                        'budget': {
+                            'enabled': True,
+                            'monthly_limit_usd': 50.0,
+                            'warning_threshold_percent': 80,
+                            'auto_fallback_on_limit': True,
+                            'reset_day': 1
+                        }
+                    }
+                }
+            except Exception as e:
+                self.logger.warning(f"Could not load config, using defaults: {e}")
+                self.config = {
+                    'llm': {
+                        'budget': {
+                            'enabled': True,
+                            'monthly_limit_usd': 50.0,
+                            'warning_threshold_percent': 80,
+                            'auto_fallback_on_limit': True,
+                            'reset_day': 1
+                        }
+                    }
+                }
         self.db_pool = db_pool
         self.redis_client = redis_client
         

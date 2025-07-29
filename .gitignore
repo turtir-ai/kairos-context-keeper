@@ -68,6 +68,9 @@ htmlcov/
 .tox/
 
 # Environment
+venv/
+env/
+.venv/
 .env.local
 .env.development.local
 .env.test.local
@@ -78,6 +81,12 @@ htmlcov/
 /dist
 /.next/
 /out/
+
+# Kairos specific
+backups/
+.kairos.pid
+test_*.py
+test_*.json
 
 # Misc
 .DS_Store

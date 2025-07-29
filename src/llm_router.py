@@ -9,8 +9,16 @@ from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from pathlib import Path
 from decimal import Decimal
-from mcp import mcp, MCPContext, MCPMessage, MCPMessageType, MCPRole
-from .analytics.budget_manager import BudgetManager, get_budget_manager
+try:
+    from src.mcp.model_context_protocol import MCPContext, MCPMessage, MCPMessageType, MCPRole
+    MCP_AVAILABLE = True
+except ImportError as e:
+    MCP_AVAILABLE = False
+    MCPContext = None
+    MCPMessage = None
+    MCPMessageType = None
+    MCPRole = None
+from src.analytics.budget_manager import BudgetManager, get_budget_manager
 
 class LLMRouter:
     """Routes LLM requests to best available model based on task type and performance"""
