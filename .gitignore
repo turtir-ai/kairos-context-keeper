@@ -2,6 +2,7 @@
 proje.md
 .env
 .env.*
+!.env.example
 .kiro/secrets/
 .cursor/mcp.json
 
