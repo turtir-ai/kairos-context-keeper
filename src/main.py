@@ -185,6 +185,36 @@ else:
 async def startup_logic():
     """Initialize database connections, RBAC system, and AgentCoordinator"""
     try:
+        # Load active project configuration first
+        try:
+            from pathlib import Path
+            kairos_config_dir = Path.home() / ".kairos"
+            active_project_file = kairos_config_dir / "active_project.json"
+            
+            if active_project_file.exists():
+                with open(active_project_file, 'r', encoding='utf-8') as f:
+                    active_project_config = json.load(f)
+                
+                active_project_path = active_project_config.get("active_project_path")
+                project_id = active_project_config.get("project_id")
+                project_name = active_project_config.get("project_name")
+                
+                if active_project_path and os.path.exists(active_project_path):
+                    # Set global project context for all systems
+                    os.environ["KAIROS_ACTIVE_PROJECT_PATH"] = active_project_path
+                    os.environ["KAIROS_PROJECT_ID"] = project_id
+                    os.environ["KAIROS_PROJECT_NAME"] = project_name
+                    
+                    logger.info(f"🎯 Active project loaded: {project_name} ({active_project_path})")
+                    logger.info(f"🆔 Project ID: {project_id}")
+                else:
+                    logger.warning(f"⚠️ Active project path not found: {active_project_path}")
+            else:
+                logger.info("📍 No active project configuration found, using default settings")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to load active project configuration: {e}")
+        
         # Try to initialize database connection
         try:
             from api.dependencies import init_dependencies
@@ -305,6 +335,24 @@ async def get_status():
             "vector_store": "connected"
         }
     }
+
+@app.get("/api/project/active")
+async def get_active_project():
+    """Get active project information"""
+    try:
+        return {
+            "project_path": os.environ.get("KAIROS_ACTIVE_PROJECT_PATH"),
+            "project_id": os.environ.get("KAIROS_PROJECT_ID"),
+            "project_name": os.environ.get("KAIROS_PROJECT_NAME"),
+            "status": "active" if os.environ.get("KAIROS_PROJECT_ID") else "none",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "error",
+            "timestamp": datetime.now().isoformat()
+        }
 
 @app.get("/api/memory/stats")
 async def get_memory_stats():

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kairos-keeper"
-version = "0.1.0"
+version = "1.0.0"
 authors = [
   { name="Tuncer Timur", email="turtirhey@gmail.com" },
 ]
@@ -39,7 +39,7 @@ dependencies = [
 ]
 
 [project.scripts]
-kairos = "src.cli:main"
+kairos = "src.cli.main:main"
 
 [project.urls]
 "Homepage" = "https://github.com/your-username/kairos-context-keeper"

@@ -1,0 +1,34 @@
+{
+  "mcpServers": {
+    "kairos": {
+      "description": "🚀 Kairos MCP Server v2.0 - Full Context Intelligence & Orchestration",
+      "command": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Scripts\\python.exe",
+      "args": ["C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\src\\mcp\\kairos_mcp_final.py"],
+      "env": {
+        "PYTHONPATH": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper;C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\src",
+        "PYTHONIOENCODING": "utf-8",
+        "PATH": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper\\venv\\Scripts;%PATH%",
+        "KAIROS_HOME": "C:\\Users\\TT\\CLONE\\Kairos_The_Context_Keeper",
+        "KAIROS_MODE": "production",
+        "MCP_SERVER_NAME": "kairos",
+        "KAIROS_LOG_LEVEL": "INFO",
+        "CONTEXT_SERVICE_ENABLED": "true",
+        "ORCHESTRATION_SERVICE_ENABLED": "true",
+        "SUPERVISOR_AGENT_ENABLED": "true",
+        "NEO4J_ENABLED": "false",
+        "QDRANT_ENABLED": "false"
+      },
+      "autoApprove": [
+        "kairos.getProjectConstitution",
+        "kairos.getSystemHealth", 
+        "kairos.getContext",
+        "kairos.getNotifications",
+        "kairos.acknowledgeNotification",
+        "kairos.analyzeCode",
+        "kairos.createTask",
+        "kairos.listTasks"
+      ],
+      "disabled": false
+    }
+  }
+}

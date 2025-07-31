@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import ast
 import subprocess
@@ -30,17 +31,26 @@ class GuardianAgent(BaseAgent):
         # Project validation rules
         self.validation_rules = {
             "code_quality": {
-                "required_patterns": [r"def\s+\w+\(.*\):", r"class\s+\w+.*:"],
-                "forbidden_patterns": [r"print\(.*\)", r"import.*\*"],
+                "required_patterns": [r"def\\s+\\w+\\(.*\\):", r"class\\s+\\w+.*:"],
+                "forbidden_patterns": [r"print\\(.*\\)", r"import.*\\*"],
                 "description": "Check for proper Python coding patterns"
             },
             "security": {
-                "forbidden_patterns": [r"eval\(", r"exec\(", r"__import__"],
+                "forbidden_patterns": [r"eval\\(", r"exec\\(", r"__import__", r"hardcoded_password"],
                 "description": "Check for potentially unsafe code patterns"
             },
             "consistency": {
                 "required_headers": ["TODO", "FIXME", "NOTE"],
                 "description": "Ensure consistent documentation and comments"
+            },
+            "architecture": {
+                "custom_checks": [
+                    {"type": "function_length", "max_lines": 50, "penalty": 20},
+                    {"type": "class_length", "max_lines": 500, "penalty": 50},
+                    {"type": "db_access", "allowed_paths": ["src/memory/"], "penalty": 100},
+                    {"type": "auth_usage", "required_import": "from src.api.auth import get_current_user", "paths": ["src/api/"], "penalty": 100}
+                ],
+                "description": "Enforce architectural principles (SOLID, DB access, Auth)"
             }
         }
         
@@ -122,12 +132,57 @@ class GuardianAgent(BaseAgent):
                     })
                     penalty += 15
         
+        # Handle custom architectural checks
+        if "custom_checks" in rule_config:
+            for check in rule_config["custom_checks"]:
+                violation_result = self._validate_custom_check(output, check)
+                if violation_result:
+                    violations.append({
+                        "rule": rule_name,
+                        "type": check["type"],
+                        "description": violation_result["description"]
+                    })
+                    penalty += check.get("penalty", 10)
+        
         return {
             "passed": len(violations) == 0,
             "violations": violations,
             "penalty": penalty
         }
         
+    def _validate_custom_check(self, output: str, check: Dict) -> Optional[Dict[str, str]]:
+        """Validate a custom architectural check"""
+        check_type = check["type"]
+        
+        if check_type == "function_length":
+            # This is a simplified check. A more robust implementation would use AST.
+            # For now, we'll use regex to get a rough idea.
+            functions = re.findall(r'def\s+\w+\(.*\):\n(?:\s+.*\n)*', output)
+            for func in functions:
+                lines = func.strip().split('\n')
+                if len(lines) > check.get("max_lines", 50):
+                    return {"description": f"Function `{lines[0].split('(')[0].replace('def ','')}` has {len(lines)} lines, exceeding the limit of {check.get('max_lines', 50)}."}
+
+        elif check_type == "class_length":
+            classes = re.findall(r'class\s+\w+\(.*\):\n(?:\s+.*\n)*', output)
+            for cls in classes:
+                lines = cls.strip().split('\n')
+                if len(lines) > check.get("max_lines", 500):
+                    return {"description": f"Class `{lines[0].split('(')[0].replace('class ','')}` has {len(lines)} lines, exceeding the limit of {check.get('max_lines', 500)}."}
+
+        elif check_type == "db_access":
+            # This is a simplified check. A more robust implementation would check file path.
+            if 'db.execute' in output or 'session.execute' in output:
+                # A more robust check would use the file path from the context.
+                return {"description": "Direct database access detected outside of `src/memory/`."}
+        
+        elif check_type == "auth_usage":
+            # This is a simplified check. A more robust implementation would use AST.
+            if '@router.post' in output and 'get_current_user' not in output:
+                 return {"description": "API endpoint defined without `get_current_user` dependency."}
+
+        return None
+
     def add_validation_rule(self, rule_name: str, rule_config: Dict):
         """Add a new validation rule"""
         self.validation_rules[rule_name] = rule_config

@@ -69,6 +69,25 @@ class MemoryManager:
                     "persistence_path": "data/memory"
                 }
         
+        # Load active project configuration for database isolation
+        self.active_project_id = None
+        self.active_project_path = None
+        self.active_project_name = None
+        
+        try:
+            # Check environment variables first (set by daemon startup)
+            self.active_project_id = os.environ.get("KAIROS_PROJECT_ID")
+            self.active_project_path = os.environ.get("KAIROS_ACTIVE_PROJECT_PATH")
+            self.active_project_name = os.environ.get("KAIROS_PROJECT_NAME")
+            
+            if self.active_project_id:
+                self.logger.info(f"🎯 Memory Manager using active project: {self.active_project_name} ({self.active_project_id})")
+            else:
+                self.logger.info("📍 No active project found, using default context")
+                
+        except Exception as e:
+            self.logger.warning(f"⚠️ Failed to load active project context: {e}")
+        
         self.logger = logging.getLogger(__name__)
         
         # Connection status flags
@@ -155,16 +174,19 @@ class MemoryManager:
         self.persistence_path = Path(self.config.get("persistence_path", "data/memory"))
         self.persistence_path.mkdir(parents=True, exist_ok=True)
         
-        # 6. Performance optimizations
-        self.query_cache = {}  # Simple in-memory cache
+        # 6. Performance optimizations - Enhanced
+        self.query_cache = {}  # Simple in-memory cache with LRU eviction
         self.cache_ttl = 30  # Cache TTL in seconds
+        self.max_cache_size = 100  # Maximum cache entries
+        self.cache_access_times = {}  # Track access times for LRU
         self.batch_operations = []  # Queue for batch operations
-        self.batch_size = 50
+        self.batch_size = 20  # Reduced from 50 to 20
         self.query_stats = {
             "cache_hits": 0,
             "cache_misses": 0,
             "batched_queries": 0,
-            "single_queries": 0
+            "single_queries": 0,
+            "cache_evictions": 0
         }
     
     async def connect_async(self):
@@ -370,8 +392,14 @@ class MemoryManager:
     # ========== SEMANTIC MEMORY OPERATIONS ==========
     
     def add_knowledge_node(self, node_id: str, data: Dict[str, Any], node_type: str = "concept") -> bool:
-        """Add a knowledge node to semantic memory"""
+        """Add a knowledge node to semantic memory with project isolation"""
         try:
+            # Add project ID to node data for isolation
+            if self.active_project_id:
+                data["project_id"] = self.active_project_id
+                data["project_name"] = self.active_project_name
+                data["project_path"] = self.active_project_path
+            
             success = self.knowledge_graph.add_node(node_id, data, node_type)
             if success:
                 self.stats["memory_layers"]["semantic"]["items"] += 1

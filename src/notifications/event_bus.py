@@ -213,13 +213,33 @@ class NotificationEventBus:
         self.notification_history.append(event)
         
         # Maintain history size limit
-        if len(self.notification_history) > self._max_history:
-            self.notification_history = self.notification_history[-self._max_history:]
+        try:
+            max_history = int(self._max_history) if self._max_history is not None else 1000
+            if len(self.notification_history) > max_history:
+                self.notification_history = self.notification_history[-max_history:]
+        except (ValueError, TypeError):
+            # Fallback if _max_history is not a valid integer
+            if len(self.notification_history) > 1000:
+                self.notification_history = self.notification_history[-1000:]
     
     def get_notification_history(self, user_id: str = None, limit: int = 50) -> List[NotificationEvent]:
         """Get notification history"""
-        history = self.notification_history[-limit:]
-        return history
+        try:
+            # Ensure limit is a valid integer
+            safe_limit = int(limit) if limit is not None else 50
+            if safe_limit < 0:
+                safe_limit = 50
+            
+            # Safe slice operation
+            if len(self.notification_history) == 0:
+                return []
+            elif len(self.notification_history) <= safe_limit:
+                return self.notification_history.copy()
+            else:
+                return self.notification_history[-safe_limit:]
+        except (ValueError, TypeError):
+            # Fallback if limit is not a valid integer
+            return self.notification_history[-50:] if self.notification_history else []
     
     def acknowledge_notification(self, notification_id: str):
         """Mark a notification as acknowledged"""

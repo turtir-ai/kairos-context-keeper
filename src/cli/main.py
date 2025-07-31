@@ -128,18 +128,59 @@ def check_status():
     except Exception as e:
         print(f"❌ API durum kontrolü hatası: {e}")
 
-def init_code_graph():
+def init_code_graph(target_path=None):
     """Initialize Kairos project and build initial code graph"""
     print("🌟 Kairos kod grafı oluşturuluyor...")
     
     try:
-        # Import required modules
-        from core.code_parser import code_parser
-        from memory.ast_converter import ast_converter
+        # Add src to Python path for imports
+        import sys
+        from pathlib import Path
         
-        # Get current directory
-        project_path = os.getcwd()
-        print(f"📂 Proje dizini: {project_path}")
+        # Get the current script directory and add src to path
+        current_dir = Path(__file__).parent.parent
+        if str(current_dir) not in sys.path:
+            sys.path.insert(0, str(current_dir))
+        
+        # Import required modules
+        from src.core.code_parser import code_parser
+        from src.memory.ast_converter import ast_converter
+        
+        # Get project path (either provided or current directory)
+        if target_path:
+            project_path = os.path.abspath(target_path)
+            if not os.path.exists(project_path):
+                print(f"❌ Belirtilen yol bulunamadı: {project_path}")
+                return
+            print(f"📂 Hedef proje dizini: {project_path}")
+        else:
+            project_path = os.getcwd()
+            print(f"📂 Mevcut proje dizini: {project_path}")
+        
+        # Save active project path to persistent configuration
+        try:
+            # Create .kairos directory in user's home if it doesn't exist
+            kairos_config_dir = Path.home() / ".kairos"
+            kairos_config_dir.mkdir(exist_ok=True)
+            
+            # Save active project configuration
+            active_project_config = {
+                "active_project_path": project_path,
+                "project_id": f"kairos_project_{int(time.time())}",
+                "last_updated": datetime.now().isoformat(),
+                "project_name": os.path.basename(project_path)
+            }
+            
+            active_project_file = kairos_config_dir / "active_project.json"
+            with open(active_project_file, 'w', encoding='utf-8') as f:
+                json.dump(active_project_config, f, indent=2, ensure_ascii=False)
+            
+            print(f"💾 Aktif proje konfigürasyonu kaydedildi: {active_project_file}")
+            print(f"🆔 Proje ID: {active_project_config['project_id']}")
+            
+        except Exception as config_error:
+            print(f"⚠️ Aktif proje konfigürasyonu kaydedilemedi: {config_error}")
+            print("📍 Sistem yine de çalışacak ancak proje izolasyonu olmayabilir")
         
         print("🔍 Kod dosyaları taranıyor...")
         
@@ -512,8 +553,17 @@ def main():
         start_daemon()
     elif command == "init":
         print_banner()
+        # Check for --path parameter
+        target_path = None
+        if len(sys.argv) > 2:
+            if sys.argv[2] == "--path" and len(sys.argv) > 3:
+                target_path = sys.argv[3]
+            else:
+                # If other parameters provided but not --path, show error
+                print("❌ Geçersiz parametre. Kullanım: kairos init [--path /path/to/project]")
+                return
         # Call the correct init function that builds code graph
-        init_code_graph()
+        init_code_graph(target_path)
     elif command == "backup":
         run_backup()
     elif command == "restore":

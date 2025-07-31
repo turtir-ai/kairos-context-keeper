@@ -40,7 +40,16 @@ try:
     from ..mcp.model_context_protocol import ModelContextProtocol, MCPContext
     MCP_AVAILABLE = True
 except ImportError:
-    MCP_AVAILABLE = False
+    try:
+        from mcp.model_context_protocol import ModelContextProtocol, MCPContext
+        MCP_AVAILABLE = True
+    except ImportError:
+        MCP_AVAILABLE = False
+        # Define dummy classes as fallbacks
+        class ModelContextProtocol:
+            pass
+        class MCPContext:
+            pass
 
 # Import plugin system
 # from src.plugins.plugin_loader import PluginLoader  # Will be implemented later
@@ -113,17 +122,18 @@ class AgentCoordinator:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         
-        # Task management
+        # Task management with memory optimization
         self.pending_tasks = deque()
         self.running_tasks = {}
-        self.completed_tasks = deque(maxlen=1000)
-        self.failed_tasks = deque(maxlen=100)
+        self.completed_tasks = deque(maxlen=100)  # Reduced from 1000 to 100
+        self.failed_tasks = deque(maxlen=20)      # Reduced from 100 to 20
         self.paused_tasks = {}
         
-        # Workflow management
+        # Workflow management with cleanup
         self.workflows = {}
         self.active_workflows = {}
         self.workflow_templates = {}
+        self._last_workflow_cleanup = datetime.now()
         
         # Workflow persistence
         self.persistence_path = Path("data/workflows")
@@ -426,57 +436,38 @@ class AgentCoordinator:
         try:
             agent = self.registered_agents[task.agent_type]
             
-            # Create MCP context for this task if available
-            mcp_context = None
-            if self.mcp and self.memory_manager:
-                try:
-                    # Create MCP context with task information
-                    mcp_context = self.mcp.create_context(
-                        project_id=task.parameters.get('project_id'),
-                        session_id=task.parameters.get('session_id'),
-                        user_id=task.parameters.get('user_id'),
-                        initial_data={
-                            'task_id': task.id,
-                            'task_name': task.name,
-                            'agent_type': task.agent_type,
-                            'task_parameters': task.parameters
-                        }
-                    )
-                    
-                    # Retrieve relevant context from memory
-                    if task.parameters.get('query') or task.parameters.get('topic'):
-                        search_query = task.parameters.get('query', task.parameters.get('topic', task.name))
-                        relevant_memories = self.memory_manager.recall_relevant_context(search_query, limit=5)
-                        mcp_context.relevant_memories = relevant_memories.get('context_memories', [])
-                        
-                    # Update agent with MCP context if it supports it
-                    if hasattr(agent, 'mcp_context'):
-                        agent.mcp_context = mcp_context
-                        
+            # Create MCP context and retrieve relevant memories in parallel
+            mcp_context_task = asyncio.create_task(self._create_mcp_context_for_task(task, agent))
+            relevant_memories_task = asyncio.create_task(self._get_relevant_memories_for_task(task))
+
+            mcp_context, relevant_memories = await asyncio.gather(mcp_context_task, relevant_memories_task)
+
+            if mcp_context and relevant_memories:
+                mcp_context.relevant_memories = relevant_memories.get('context_memories', [])
+                if hasattr(agent, 'mcp_context'):
+                    agent.mcp_context = mcp_context
+                            
                     # Broadcast MCP context update to frontend
-                    if self.websocket_manager:
+                    if self.websocket_manager and hasattr(mcp_context, 'context_id'):
                         await self.websocket_manager.broadcast_message(WebSocketMessage(
                             message_type=MessageType.MCP_CONTEXT_UPDATE,
                             data={
                                 "task_id": task.id,
-                                "context_id": mcp_context.context_id,
-                                "project_id": mcp_context.project_id,
-                                "session_id": mcp_context.session_id,
-                                "global_context": mcp_context.global_context,
-                                "local_context": mcp_context.local_context,
-                                "relevant_memories": mcp_context.relevant_memories[:3],  # Limit for UI
-                                "available_tools": [tool.to_dict() for tool in self.mcp.tools.values()][:5],  # Top 5 tools
+                                "context_id": getattr(mcp_context, 'context_id', ''),
+                                "project_id": getattr(mcp_context, 'project_id', ''),
+                                "session_id": getattr(mcp_context, 'session_id', ''),
+                                "global_context": getattr(mcp_context, 'global_context', {}),
+                                "local_context": getattr(mcp_context, 'local_context', {}),
+                                "relevant_memories": getattr(mcp_context, 'relevant_memories', [])[:3],  # Limit for UI
+                                "available_tools": [],  # Simplified
                                 "context_summary": {
-                                    "memories_count": len(mcp_context.relevant_memories),
-                                    "tools_count": len(self.mcp.tools),
-                                    "context_size": len(str(mcp_context.global_context)) + len(str(mcp_context.local_context))
+                                    "memories_count": len(getattr(mcp_context, 'relevant_memories', [])),
+                                    "tools_count": 0,
+                                    "context_size": len(str(getattr(mcp_context, 'global_context', {})))
                                 }
                             },
                             timestamp=datetime.now()
                         ))
-                        
-                except Exception as e:
-                    self.logger.warning(f"Failed to create MCP context for task {task.id}: {e}")
             
             # Send progress update - 25%
             if self.websocket_manager:
@@ -619,6 +610,33 @@ class AgentCoordinator:
             
             return {"error": error_msg}
     
+    async def _get_relevant_memories_for_task(self, task: Task) -> Dict[str, Any]:
+        if not self.memory_manager:
+            return {}
+        if task.parameters.get('query') or task.parameters.get('topic'):
+            search_query = task.parameters.get('query', task.parameters.get('topic', task.name))
+            return self.memory_manager.recall_relevant_context(search_query, limit=5)
+        return {}
+
+    async def _create_mcp_context_for_task(self, task: Task, agent) -> Optional[MCPContext]:
+        if not self.mcp:
+            return None
+        try:
+            return self.mcp.create_context(
+                project_id=task.parameters.get('project_id'),
+                session_id=task.parameters.get('session_id'),
+                user_id=task.parameters.get('user_id'),
+                initial_data={
+                    'task_id': task.id,
+                    'task_name': task.name,
+                    'agent_type': task.agent_type,
+                    'task_parameters': task.parameters
+                }
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to create MCP context for task {task.id}: {e}")
+            return None
+
     def _check_dependencies(self, task: Task) -> bool:
         """Check if task dependencies are satisfied"""
         if not task.dependencies:

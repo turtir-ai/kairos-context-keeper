@@ -72,6 +72,8 @@ pip install -r requirements.txt
 # Install the package in editable mode to make the 'kairos' command available globally
 pip install -e .
 
+**IMPORTANT FOR WINDOWS USERS:** After installation, you might need to add Python's user script directory to your system's PATH to run the `kairos` command globally. This is typically located at `C:\Users\YourUsername\AppData\Roaming\Python\Python312\Scripts`. You can add this to your PATH environment variable in Windows System Properties.
+
 # Setup environment
 copy .env.example .env  # Windows
 # cp .env.example .env  # Linux/Mac
